@@ -21,7 +21,7 @@ import org.wtrzcinski.files.memory.lock.MemoryFileLock
 import org.wtrzcinski.files.memory.lock.MemoryFileLock.Companion.withLock
 import org.wtrzcinski.files.memory.lock.MutexMemoryFileLock
 
-class BitmapGroup(memoryOffset: Long, memoryByteSize: Long) : Bitmap {
+class BitmapGroup(memoryOffset: Long, private val memoryByteSize: Long) : Bitmap {
 
     private val lock: MemoryFileLock = MutexMemoryFileLock()
 
@@ -44,6 +44,8 @@ class BitmapGroup(memoryOffset: Long, memoryByteSize: Long) : Bitmap {
             }
             val withPrev = result.copy(prev = prev, name = name)
             reserved.add(withPrev)
+
+            require(memoryByteSize == reserved.size + free.size)
 
             return withPrev
         }
@@ -88,6 +90,8 @@ class BitmapGroup(memoryOffset: Long, memoryByteSize: Long) : Bitmap {
             for (it in addToFree) {
                 free.add(it)
             }
+
+            require(memoryByteSize == this.reserved.size + this.free.size)
         }
     }
 }

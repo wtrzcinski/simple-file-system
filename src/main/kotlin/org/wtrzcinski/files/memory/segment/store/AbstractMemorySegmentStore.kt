@@ -45,18 +45,6 @@ internal abstract class AbstractMemorySegmentStore(
 
     val bodyByteSize: Long get() = maxMemoryBlockSize - headerSize
 
-    val headerSpaceFactor: Double
-        get() {
-            val metadataSize: Double = (this.bitmap.reserved.count * headerSize).toDouble()
-            return metadataSize / this.bitmap.reserved.size
-        }
-
-    val wastedSpaceFactor: Double
-        get() {
-            val wastedSpaceSize = bitmap.free.findSizeSum(minMemoryBlockSize)
-            return wastedSpaceSize / this.bitmap.reserved.size
-        }
-
     override fun lock(offset: SegmentOffset): MemoryFileLock {
         return locks.compute(offset.start) { _, value ->
             return@compute value ?: MutexMemoryFileLock(offset)

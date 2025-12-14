@@ -61,7 +61,6 @@ internal data class MemorySeekableByteChannel(
                     val current = segments.current()
                     val newBodySize = current.position
                     current.resize(newBodySize)
-                    current.close()
                 }
                 segments.close()
             } finally {

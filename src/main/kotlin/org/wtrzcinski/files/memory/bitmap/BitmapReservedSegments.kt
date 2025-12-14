@@ -37,10 +37,6 @@ class BitmapReservedSegments {
 
     val size: Long get() = reservedSize.load()
 
-    fun roots(): List<BitmapSegment> {
-        return ArrayList(roots)
-    }
-
     fun add(other: BitmapSegment) {
         reserved.add(other)
         if (other.isRoot()) {

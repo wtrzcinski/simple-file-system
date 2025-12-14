@@ -159,11 +159,4 @@ class FileSystemTest {
 
         assertThat(String(actualContent, Charsets.UTF_8)).isEqualTo(givenFileContent)
     }
-
-    @Test
-    fun should() {
-        val allocate = ByteBuffer.allocate(8)
-        allocate.putLong(-1)
-        println(allocate)
-    }
 }

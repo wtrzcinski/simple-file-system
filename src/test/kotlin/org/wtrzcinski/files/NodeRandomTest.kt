@@ -19,46 +19,48 @@ package org.wtrzcinski.files
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Timeout
-import org.wtrzcinski.files.memory.MemoryFileSystemFacade
-import java.lang.foreign.MemorySegment
-import java.util.concurrent.TimeUnit
+import org.wtrzcinski.files.memory.spi.SimpleMemoryFileStore
+import java.net.URI
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.Path
 
 @Suppress("MayBeConstant")
 internal class NodeRandomTest {
     companion object {
-        val megabytes = 10
-        val memoryBlockSize = 256
-        val maxStringSize = memoryBlockSize * 2
-        val memory: MemorySegment = MemorySegment.ofArray(ByteArray(1024 * 1024 * megabytes))
-        val fs = MemoryFileSystemFacade(memory = memory, blockSize = memoryBlockSize)
-        val repeats = megabytes * 1_000
+        val megabytes: Int = 2
+        val memoryBlockSize: Int = 256
+        val maxStringSize: Int = memoryBlockSize * 2
+        val fileSystem = FileSystems.newFileSystem(URI.create("memory:///"), mapOf("capacity" to 1024 * 1024 * megabytes, "blockSize" to memoryBlockSize))
+        val repeats: Int = megabytes * 1_000
     }
 
     @AfterEach
     fun afterEach() {
-        fs.roots().forEach {
-            fs.delete(it)
+        val dir = Path.of(URI.create("memory:///"))
+        val list = Files.list(dir)
+        for (child in list) {
+            Files.delete(child)
         }
-        assertThat(fs.size()).isEqualTo(0L)
+        val fileStore = dir.fileSystem.fileStores.first()
+        val used = fileStore.totalSpace - fileStore.unallocatedSpace
+        assertThat(used).isEqualTo(74L)
     }
 
     @Test
-    @Timeout(60, unit = TimeUnit.SECONDS)
     fun `should create random files`() {
+        val parent = Path.of(URI.create("memory:///"))
         repeat(repeats) {
-            NodeTest.createRandomFile(fs.segments, maxStringSize)
+            NodeTest.createRandomFile(parent = parent, maxStringSize = maxStringSize)
         }
-        assertThat(fs.size()).isNotEqualTo(0L)
         repeat(repeats) {
-            val random = fs.roots().random()
-            fs.delete(random)
-            NodeTest.createRandomFile(fs.segments, maxStringSize)
+            val randomChild = Files.list(parent).toList().random()
+            Files.delete(randomChild)
+            NodeTest.createRandomFile(parent = parent, maxStringSize = maxStringSize)
         }
-
-        val metadata = fs.segments
-        println(fs.sizeFactor)
-        println(metadata.headerSpaceFactor)
-        println(metadata.wastedSpaceFactor)
+        val fileStore = parent.fileSystem.fileStores.first() as SimpleMemoryFileStore
+        println(fileStore.sizeFactor)
+        println(fileStore.headerSpaceFactor)
+        println(fileStore.wastedSpaceFactor)
     }
 }

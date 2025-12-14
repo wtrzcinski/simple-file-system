@@ -35,9 +35,10 @@ class BitmapFreeSegments {
 
     private var freeSize: AtomicLong = AtomicLong(0L)
 
-    fun size(): Long {
-        return freeSize.load()
-    }
+    val size: Long
+        get() {
+            return freeSize.load()
+        }
 
     fun findSizeSum(segmentSizeLt: Long): Double {
         var result = 0.0

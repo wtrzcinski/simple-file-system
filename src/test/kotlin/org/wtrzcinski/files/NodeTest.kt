@@ -24,72 +24,73 @@ import org.wtrzcinski.files.memory.node.Node
 import org.wtrzcinski.files.memory.node.NodeRef
 import org.wtrzcinski.files.memory.node.NodeStore
 import org.wtrzcinski.files.memory.node.RegularFile
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
 import java.lang.foreign.MemorySegment
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.random.Random
 
 internal class NodeTest {
 
     @Test
     fun `should create files`() {
-        val memory = MemoryFileSystemFacade(MemorySegment.ofArray(ByteArray(1024)), blockSize = 24)
-        val givenRootNode = memory.root()
+        val fileSystem = MemoryFileSystemFacade(MemorySegment.ofArray(ByteArray(1024)), blockSize = 24)
+        val givenRootNode = fileSystem.root()
         val rootId = givenRootNode.nodeRef
-        val givenFileNode1 = newFileNode(memory.segments, "file1-file1-file1")
-        val givenFileNode2 = newFileNode(memory.segments, "file2-file2-file2")
-        val givenFileNode3 = newFileNode(memory.segments, "file3-file3-file3")
+        val givenFileNode1 = newFileNode(fileSystem, "file1-file1-file1")
+        val givenFileNode2 = newFileNode(fileSystem, "file2-file2-file2")
+        val givenFileNode3 = newFileNode(fileSystem, "file3-file3-file3")
 
-        val reservedSizeAfterFirstFile = memory.size()
-        val fileId1 = NodeStore.createRegularFile(memory.segments, node = givenFileNode1)
-        val fileId2 = NodeStore.createRegularFile(memory.segments, node = givenFileNode2)
+        val reservedSizeAfterFirstFile = fileSystem.size()
+        val fileId1 = NodeStore.createRegularFile(fileSystem.segments, child = givenFileNode1)
+        val fileId2 = NodeStore.createRegularFile(fileSystem.segments, child = givenFileNode2)
 
-        var actualRootNode = NodeStore.read(memory.segments, Node::class, rootId)
-        var actualFileNode1 = NodeStore.read(memory.segments, Node::class, fileId1.nodeRef)
-        var actualFileNode2 = NodeStore.read(memory.segments, Node::class, fileId2.nodeRef)
+        var actualRootNode = NodeStore.read(fileSystem.segments, Node::class, rootId)
+        var actualFileNode1 = NodeStore.read(fileSystem.segments, Node::class, fileId1.nodeRef)
+        var actualFileNode2 = NodeStore.read(fileSystem.segments, Node::class, fileId2.nodeRef)
         assertThat(actualRootNode).isEqualTo(givenRootNode)
         assertThat(actualFileNode1).isEqualTo(givenFileNode1)
         assertThat(actualFileNode2).isEqualTo(givenFileNode2)
 
-        val fileId3 = NodeStore.createRegularFile(memory.segments, node = givenFileNode3)
+        val fileId3 = NodeStore.createRegularFile(fileSystem.segments, child = givenFileNode3)
 
 //        delete file 1
-        memory.delete(fileId1.nodeRef)
-        actualRootNode = NodeStore.read(memory.segments, Node::class, rootId)
-        actualFileNode1 = NodeStore.read(memory.segments, Node::class, fileId1.nodeRef)
-        actualFileNode2 = NodeStore.read(memory.segments, Node::class, fileId2.nodeRef)
-        var actualFileNode3 = NodeStore.read(memory.segments, Node::class, fileId3.nodeRef)
+        fileSystem.delete(fileId1.nodeRef)
+        actualRootNode = NodeStore.read(fileSystem.segments, Node::class, rootId)
+        actualFileNode1 = NodeStore.read(fileSystem.segments, Node::class, fileId1.nodeRef)
+        actualFileNode2 = NodeStore.read(fileSystem.segments, Node::class, fileId2.nodeRef)
+        var actualFileNode3 = NodeStore.read(fileSystem.segments, Node::class, fileId3.nodeRef)
         assertThat(actualRootNode).isEqualTo(givenRootNode)
         assertThat(actualFileNode1).isEqualTo(givenFileNode1)
         assertThat(actualFileNode2).isEqualTo(givenFileNode2)
         assertThat(actualFileNode3).isEqualTo(givenFileNode3)
 
 //        delete file 2
-        memory.delete(fileId2.nodeRef)
-        actualRootNode = NodeStore.read(memory.segments, Node::class, rootId)
-        actualFileNode1 = NodeStore.read(memory.segments, Node::class, fileId1.nodeRef)
-        actualFileNode2 = NodeStore.read(memory.segments, Node::class, fileId2.nodeRef)
-        actualFileNode3 = NodeStore.read(memory.segments, Node::class, fileId3.nodeRef)
+        fileSystem.delete(fileId2.nodeRef)
+        actualRootNode = NodeStore.read(fileSystem.segments, Node::class, rootId)
+        actualFileNode1 = NodeStore.read(fileSystem.segments, Node::class, fileId1.nodeRef)
+        actualFileNode2 = NodeStore.read(fileSystem.segments, Node::class, fileId2.nodeRef)
+        actualFileNode3 = NodeStore.read(fileSystem.segments, Node::class, fileId3.nodeRef)
         assertThat(actualRootNode).isEqualTo(givenRootNode)
         assertThat(actualFileNode1).isEqualTo(givenFileNode1)
         assertThat(actualFileNode2).isEqualTo(givenFileNode2)
         assertThat(actualFileNode3).isEqualTo(givenFileNode3)
 
 //        delete file 3
-        memory.delete(fileId3.nodeRef)
-        assertThat(memory.size()).isEqualTo(reservedSizeAfterFirstFile)
+        fileSystem.delete(fileId3.nodeRef)
+        assertThat(fileSystem.size()).isEqualTo(reservedSizeAfterFirstFile)
     }
 
     companion object {
-        fun createRandomFile(segments: MemorySegmentStore, maxStringSize: Int) {
-            val given = newFileNode(segments, newAlphanumericString(maxStringSize))
-            val nodeRef = NodeStore.createRegularFile(segments, node = given)
-            val actual = NodeStore.read(segments, Node::class, nodeRef.nodeRef)
-            assertThat(actual).isEqualTo(given)
+        fun createRandomFile(parent: Path, maxStringSize: Int) {
+            val childName = newAlphanumericString(maxStringSize)
+            val child = parent.resolve(childName)
+            Files.createFile(child)
+            assertThat(Files.exists(child)).isTrue()
         }
 
-        fun newFileNode(segments: MemorySegmentStore, name: String): RegularFile {
+        fun newFileNode(fileSystem: MemoryFileSystemFacade, name: String): RegularFile {
             return RegularFile(
-                segments = segments,
+                segments = fileSystem.segments,
                 name = name,
                 modified = Random.nextLong(),
                 created = Random.nextLong(),

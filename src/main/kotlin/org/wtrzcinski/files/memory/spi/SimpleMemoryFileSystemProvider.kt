@@ -37,7 +37,7 @@ import kotlin.use
 
 @Suppress("UNCHECKED_CAST")
 internal class SimpleMemoryFileSystemProvider(
-    val fs: MemoryFileSystemFacade? = null,
+    val fileSystem: MemoryFileSystemFacade? = null,
 ) : FileSystemProvider() {
     //    memory:/c:/bar/foo.txt"
     override fun getScheme(): String {
@@ -45,13 +45,14 @@ internal class SimpleMemoryFileSystemProvider(
     }
 
     override fun delete(path: Path) {
-        require(fs != null)
+        require(fileSystem != null)
+
         path as SimpleMemoryPath
 
         val node = path.node
         if (node.nodeRef.isValid()) {
             val parentNode = path.parent?.node
-            this.fs.delete(parentNode, node)
+            this.fileSystem.delete(parentNode, node)
         }
     }
 
@@ -62,7 +63,7 @@ internal class SimpleMemoryFileSystemProvider(
     ): MemorySeekableByteChannel {
         path as SimpleMemoryPath
 
-        require(fs != null)
+        require(fileSystem != null)
 
         val mode = if (options.contains(StandardOpenOption.APPEND)) {
             Append
@@ -75,7 +76,7 @@ internal class SimpleMemoryFileSystemProvider(
         }
         val parent = path.parent?.node
         val child = path.node
-        return fs.newByteChannel(directory = parent, childName = child.name, mode = mode)
+        return fileSystem.newByteChannel(directory = parent, childName = child.name, mode = mode)
     }
 
     override fun newFileChannel(path: Path, options: Set<OpenOption>, vararg attrs: FileAttribute<*>): FileChannel {
@@ -138,7 +139,7 @@ internal class SimpleMemoryFileSystemProvider(
     }
 
     override fun createDirectory(dir: Path, vararg attrs: FileAttribute<*>) {
-        require(fs != null)
+        require(fileSystem != null)
 
         dir as SimpleMemoryPath
 
@@ -153,7 +154,7 @@ internal class SimpleMemoryFileSystemProvider(
         val node = dir.node
         if (!node.exists()) {
             require(node is Unknown)
-            fs.createDirectory(parentNode, node)
+            fileSystem.createDirectory(parentNode, node)
             require(dir.node is Directory)
         }
     }
@@ -216,7 +217,8 @@ internal class SimpleMemoryFileSystemProvider(
 
     override fun getPath(uri: URI): Path {
         val fileSystem = getFileSystem(uri)
-        return fileSystem.getPath(uri.path)
+        val path = uri.path
+        return fileSystem.getPath(path)
     }
 
     override fun isHidden(path: Path): Boolean {

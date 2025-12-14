@@ -18,13 +18,13 @@ package org.wtrzcinski.files.memory
 
 import org.wtrzcinski.files.memory.bitmap.Bitmap
 import org.wtrzcinski.files.memory.bitmap.BitmapGroup
-import org.wtrzcinski.files.memory.bitmap.BitmapSegment
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode.Write
 import org.wtrzcinski.files.memory.channels.MemorySeekableByteChannel
 import org.wtrzcinski.files.memory.common.SegmentOffset
 import org.wtrzcinski.files.memory.lock.MemoryFileLock.Companion.use
 import org.wtrzcinski.files.memory.node.*
+import org.wtrzcinski.files.memory.segment.store.AbstractMemorySegmentStore
 import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
 import java.io.File
 import java.lang.foreign.MemorySegment
@@ -44,9 +44,9 @@ internal class MemoryFileSystemFacade(
         }
     }
 
-    private val bitmap: BitmapGroup = Bitmap.of(memoryOffset = 0L, memorySize = memory.byteSize())
+    val bitmap: BitmapGroup = Bitmap.of(memoryOffset = 0L, memorySize = memory.byteSize())
 
-    val segments = MemorySegmentStore.of(memory = memory, bitmap = bitmap, maxMemoryBlockByteSize = blockSize)
+    val segments: AbstractMemorySegmentStore = MemorySegmentStore.of(memory = memory, bitmap = bitmap, maxMemoryBlockByteSize = blockSize)
 
     val rootRef: NodeRef = run {
         val now = System.currentTimeMillis()
@@ -57,14 +57,6 @@ internal class MemoryFileSystemFacade(
     fun root(): Directory {
         return NodeStore.read(segments, Directory::class, rootRef)
     }
-
-    val sizeFactor: Double
-        get() {
-            val reserved = bitmap.reserved.size.toDouble()
-            val result = reserved / memory.byteSize()
-            require(result <= 1)
-            return result
-        }
 
     fun size(): Long {
         return bitmap.reserved.size
@@ -104,7 +96,7 @@ internal class MemoryFileSystemFacade(
             child = NodeStore.createRegularFile(
                 segments = segments,
                 directory = directory,
-                node = RegularFile(
+                child = RegularFile(
                     segments = segments,
                     name = childName,
                 )
@@ -130,16 +122,12 @@ internal class MemoryFileSystemFacade(
         }
     }
 
-    fun roots(): Collection<BitmapSegment> {
-        return bitmap.reserved.roots()
-    }
-
-    fun delete(directory: Node?, child: Node) {
+    fun delete(parent: Node?, child: Node) {
         if (child.nodeRef == this.rootRef) {
             return
         }
-        require(directory is Directory)
-        directory.removeChildByName(child.name)
+        require(parent is Directory)
+        parent.removeChildByName(child.name)
         child.delete()
     }
 

@@ -28,21 +28,21 @@ import kotlin.reflect.cast
 import kotlin.use
 
 internal object NodeStore {
-    fun createRegularFile(segments: MemorySegmentStore, directory: Directory? = null, node: RegularFile): RegularFile {
-        if (node.name.isEmpty()) {
+    fun createRegularFile(segments: MemorySegmentStore, directory: Directory? = null, child: RegularFile): RegularFile {
+        if (child.name.isEmpty()) {
             throw NodeValidationException()
         }
-        val newDataSegment = segments.reserveSegment(name = node.name)
+        val newDataSegment = segments.reserveSegment(name = child.name)
         val serialized = newDataSegment.newByteChannel(mode = Write, null)
         serialized.use {
-            write(serialized, node, NodeType.RegularFile)
+            write(serialized, child, NodeType.RegularFile)
         }
         val offset = serialized.offset()
         val nodeRef = NodeRef(start = offset.start)
         if (directory != null) {
             directory.addChild(nodeRef)
         }
-        return node.withNodeRef(nodeRef)
+        return child.withNodeRef(nodeRef)
     }
 
     fun createDirectory(segments: MemorySegmentStore, parent: Directory? = null, child: Node): NodeRef {

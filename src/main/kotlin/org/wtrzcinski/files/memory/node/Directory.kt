@@ -39,6 +39,12 @@ internal class Directory(
     permissions = permissions,
     dataRef = dataRef,
 ) {
+    fun randomChild(): Node {
+        val random: Long = findChildIds().toList().random()
+        val randomChild = NodeStore.read(segments, Node::class, NodeRef(random))
+        return randomChild
+    }
+
     override fun withNodeRef(nodeRef: NodeRef): Node {
         return Directory(
             segments = segments,

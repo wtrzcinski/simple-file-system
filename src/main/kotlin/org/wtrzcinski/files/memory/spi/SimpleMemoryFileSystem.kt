@@ -56,15 +56,15 @@ internal data class SimpleMemoryFileSystem(
         context.close()
     }
 
+    override fun getFileStores(): Iterable<FileStore?>? {
+        return listOf(SimpleMemoryFileStore(context))
+    }
+
     override fun isOpen(): Boolean {
         TODO("Not yet implemented")
     }
 
     override fun isReadOnly(): Boolean {
-        TODO("Not yet implemented")
-    }
-
-    override fun getFileStores(): Iterable<FileStore?>? {
         TODO("Not yet implemented")
     }
 
