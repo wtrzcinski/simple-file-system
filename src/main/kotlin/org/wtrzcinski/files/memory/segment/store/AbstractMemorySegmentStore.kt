@@ -13,29 +13,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.segment.store
 
-import org.wtrzcinski.files.memory.bitmap.Bitmap
+import org.wtrzcinski.files.memory.bitmap.BitmapGroup
 import org.wtrzcinski.files.memory.common.Segment
 import org.wtrzcinski.files.memory.common.SegmentOffset
+import org.wtrzcinski.files.memory.lock.MemoryFileLock
+import org.wtrzcinski.files.memory.lock.MutexMemoryFileLock
 import org.wtrzcinski.files.memory.segment.MemoryByteBuffer
 import org.wtrzcinski.files.memory.segment.MemorySegment
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.ReentrantLock
 
-abstract class AbstractMemorySegmentStore(
+internal abstract class AbstractMemorySegmentStore(
     val memory: java.lang.foreign.MemorySegment,
-    val bitmap: Bitmap,
+    val bitmap: BitmapGroup,
     val maxMemoryBlockSize: Int,
 ) : MemorySegmentStore {
 
-    private val locks = ConcurrentHashMap<Long, ReentrantLock>()
+    private val locks = ConcurrentHashMap<Long, MutexMemoryFileLock>()
 
     abstract val bodySizeHeader: Long
 
     abstract val nextRefHeaderSize: Long
 
-    val minBodyByteSize: Long get() = MemorySegmentStore.Companion.longByteSize
+    val minBodyByteSize: Long get() = MemorySegmentStore.longByteSize
 
     val headerSize: Long get() = bodySizeHeader + nextRefHeaderSize
 
@@ -55,42 +57,39 @@ abstract class AbstractMemorySegmentStore(
             return wastedSpaceSize / this.bitmap.reserved.size
         }
 
-    override fun lock(offset: SegmentOffset): ReentrantLock {
-        val lock = locks.computeIfAbsent(offset.start) {
-            ReentrantLock(true)
-        }
-        lock.lock()
-        return lock
+    override fun lock(offset: SegmentOffset): MemoryFileLock {
+        return locks.compute(offset.start) { _, value ->
+            return@compute value ?: MutexMemoryFileLock(offset)
+        } as MutexMemoryFileLock
     }
 
-    override fun unlock(offset: SegmentOffset) {
-        val lock = locks.remove(offset.start)
-        lock?.unlock()
-    }
-
-    override fun findSegment(offset: SegmentOffset): org.wtrzcinski.files.memory.segment.MemorySegment {
-        return MemorySegment(metadata = this, start = offset.start)
+    override fun findSegment(offset: SegmentOffset): MemorySegment {
+        return MemorySegment(segments = this, start = offset.start)
     }
 
     override fun releaseAll(other: Segment) {
         bitmap.releaseAll(other = other)
     }
 
-    override fun reserveSegment(prevOffset: Long): MemorySegment {
-        val bodyByteSize: Long = bodyByteSize
-        require(bodyByteSize >= minBodyByteSize)
+    override fun reserveSegment(bodySize: Long, prevOffset: Long, name: String?): MemorySegment {
+        val bodyByteSize: Long = if (bodySize >= 0) {
+            bodySize
+        } else {
+            this.bodyByteSize
+        }
         val segmentSize = bodyByteSize + headerSize
         val reserveBySize = bitmap.reserveBySize(
             byteSize = segmentSize,
-            prev = prevOffset
+            prev = prevOffset,
+            name = name,
         )
-        val segment = MemorySegment(
-            metadata = this,
+        require(reserveBySize.start != prevOffset)
+        return MemorySegment(
+            segments = this,
             start = reserveBySize.start,
             initialBodySize = bodyByteSize,
             initialNextRef = -1,
         )
-        return segment
     }
 
     override fun buffer(offset: Long, size: Long): MemoryByteBuffer {

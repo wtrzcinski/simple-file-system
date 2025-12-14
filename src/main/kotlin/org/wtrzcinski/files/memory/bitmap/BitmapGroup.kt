@@ -13,25 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.bitmap
 
 import org.wtrzcinski.files.memory.common.Segment
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
+import org.wtrzcinski.files.memory.lock.MemoryFileLock
+import org.wtrzcinski.files.memory.lock.MemoryFileLock.Companion.withLock
+import org.wtrzcinski.files.memory.lock.MutexMemoryFileLock
 
 class BitmapGroup(memoryOffset: Long, memoryByteSize: Long) : Bitmap {
 
-    private val lock: ReentrantLock = ReentrantLock(true)
+    private val lock: MemoryFileLock = MutexMemoryFileLock()
 
-    override val free: BitmapFreeSegments = BitmapFreeSegments(lock)
+    override val free: BitmapFreeSegments = BitmapFreeSegments()
 
-    override val reserved: BitmapReservedSegments = BitmapReservedSegments(lock)
+    override val reserved: BitmapReservedSegments = BitmapReservedSegments()
 
     init {
         free.add(BitmapSegment(start = memoryOffset, size = memoryByteSize))
     }
 
-    override fun reserveBySize(byteSize: Long, prev: Long): BitmapSegment {
+    override fun reserveBySize(byteSize: Long, prev: Long, name: String?): BitmapSegment {
         lock.withLock {
             var result = free.findBySize(byteSize)
             free.remove(result)
@@ -40,9 +42,9 @@ class BitmapGroup(memoryOffset: Long, memoryByteSize: Long) : Bitmap {
                 free.add(divide.second)
                 result = divide.first
             }
-            val withPrev = result.withPrev(prev = prev)
+            val withPrev = result.copy(prev = prev, name = name)
             reserved.add(withPrev)
-1
+
             return withPrev
         }
     }

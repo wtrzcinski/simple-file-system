@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.bitmap
 
 import java.util.concurrent.CopyOnWriteArrayList
@@ -24,7 +25,7 @@ import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
 
 @OptIn(ExperimentalAtomicApi::class)
-class BitmapReservedSegments(private val lock: ReentrantLock) {
+class BitmapReservedSegments {
 
     private val reserved: CopyOnWriteArrayList<BitmapSegment> = CopyOnWriteArrayList()
 
@@ -37,37 +38,29 @@ class BitmapReservedSegments(private val lock: ReentrantLock) {
     val size: Long get() = reservedSize.load()
 
     fun roots(): List<BitmapSegment> {
-        lock.withLock {
-            return ArrayList(roots)
-        }
+        return ArrayList(roots)
     }
 
     fun add(other: BitmapSegment) {
-        lock.withLock {
-            reserved.add(other)
-            if (other.isRoot()) {
-                roots.add(other)
-            }
-            this.reservedSize += other.size
+        reserved.add(other)
+        if (other.isRoot()) {
+            roots.add(other)
         }
+        this.reservedSize += other.size
     }
 
     fun remove(other: BitmapSegment) {
-        lock.withLock {
-            val remove = reserved.remove(other)
-            if (!remove) {
-                throw BitmapOptimisticLockException()
-            }
-            if (other.isRoot()) {
-                roots.remove(other)
-            }
-            this.reservedSize -= other.size
+        val remove = reserved.remove(other)
+        if (!remove) {
+            throw BitmapOptimisticLockException()
         }
+        if (other.isRoot()) {
+            roots.remove(other)
+        }
+        this.reservedSize -= other.size
     }
 
     fun copy(): Iterable<BitmapSegment> {
-        lock.withLock {
-            return ArrayList(reserved)
-        }
+        return ArrayList(reserved)
     }
 }

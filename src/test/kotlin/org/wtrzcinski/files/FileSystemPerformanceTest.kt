@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files
 
 import kotlinx.coroutines.Dispatchers
@@ -25,11 +26,17 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.Parameter
 import org.junit.jupiter.params.ParameterizedClass
 import org.junit.jupiter.params.provider.ArgumentsSource
+import org.wtrzcinski.files.arguments.PathProvider
 import org.wtrzcinski.files.arguments.TestArgumentsProvider
-import org.wtrzcinski.files.arguments.TestPathProvider
 import org.wtrzcinski.files.common.Fixtures.newAlphanumericString
 import org.wtrzcinski.files.common.Fixtures.newUniqueString
 import java.nio.file.Files
+import java.nio.file.StandardOpenOption.APPEND
+import java.nio.file.StandardOpenOption.CREATE
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import kotlin.text.Charsets.UTF_8
 import kotlin.time.measureTime
 
 @ParameterizedClass
@@ -42,7 +49,7 @@ class FileSystemPerformanceTest {
     }
 
     @Parameter
-    lateinit var fileSystem: TestPathProvider
+    lateinit var fileSystem: PathProvider
 
     @Test
     fun `should upsert in loop`() {
@@ -51,7 +58,7 @@ class FileSystemPerformanceTest {
                 .forEach { _ ->
                     val givenFileName = fileSystem.getPath(newUniqueString())
                     val givenFileContent = newAlphanumericString(512)
-                    Files.write(givenFileName, listOf(givenFileContent), Charsets.UTF_8)
+                    Files.write(givenFileName, listOf(givenFileContent), UTF_8)
                 }
         }
         println("upsert: $fileSystem $duration")
@@ -63,7 +70,7 @@ class FileSystemPerformanceTest {
             .map { _ ->
                 val givenFileName = fileSystem.getPath(newUniqueString())
                 val givenFileContent = newAlphanumericString(512)
-                Files.write(givenFileName, listOf(givenFileContent), Charsets.UTF_8)
+                Files.write(givenFileName, listOf(givenFileContent), UTF_8)
                 val actual = Files.exists(givenFileName)
                 assertThat(actual).isTrue()
                 givenFileName to givenFileContent
@@ -85,7 +92,7 @@ class FileSystemPerformanceTest {
             .map { _ ->
                 val givenFileName = fileSystem.getPath(newUniqueString())
                 val givenFileContent = newAlphanumericString(512)
-                Files.write(givenFileName, listOf(givenFileContent), Charsets.UTF_8)
+                Files.write(givenFileName, listOf(givenFileContent), UTF_8)
                 val actual = Files.exists(givenFileName)
                 assertThat(actual).isTrue()
                 givenFileName to givenFileContent
@@ -112,7 +119,7 @@ class FileSystemPerformanceTest {
                 async(Dispatchers.Default) {
                     val givenFileContent = newAlphanumericString(512)
 
-                    Files.writeString(givenFileName, givenFileContent, Charsets.UTF_8)
+                    Files.writeString(givenFileName, givenFileContent, UTF_8)
 
                     val actual = Files.readString(givenFileName)
                     assertThat(actual).contains(givenFileContent)
@@ -122,21 +129,25 @@ class FileSystemPerformanceTest {
     }
 
     @Test
-    @Disabled("doesn't work in memory file system")
-    fun `should append in loop parallel`() = runTest {
+    fun `should append in loop parallel`() {
         val givenFileName = fileSystem.getPath(newUniqueString())
 
-        (0..<threads)
-            .map { _ ->
-                async(Dispatchers.Default) {
-                    val givenFileContent = newAlphanumericString(512)
+        val pool = Executors.newWorkStealingPool()
+        val futures = CopyOnWriteArrayList<Future<*>>()
+        repeat(threads) {
+            val submit: Future<*> = pool.submit {
+                val givenFileContent = newAlphanumericString(512)
 
-                    Files.writeString(givenFileName, givenFileContent, Charsets.UTF_8)
+                Files.writeString(givenFileName, givenFileContent, APPEND, CREATE)
 
-                    val actual = Files.readString(givenFileName)
-                    assertThat(actual).contains(givenFileContent)
-                }
+                val actual = Files.readString(givenFileName)
+                assertThat(actual).contains(givenFileContent)
             }
-            .awaitAll()
+            futures.add(submit)
+        }
+
+        for (future in futures) {
+            future.get()
+        }
     }
 }

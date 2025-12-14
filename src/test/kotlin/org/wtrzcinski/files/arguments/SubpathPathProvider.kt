@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.arguments
 
 import java.nio.file.Path
 
 class SubpathPathProvider(
     private val directory: Path
-) : TestPathProvider {
+) : PathProvider {
 
     override fun getPath(path: String, vararg more: String): Path {
         val other = directory.fileSystem.getPath(path, *more)

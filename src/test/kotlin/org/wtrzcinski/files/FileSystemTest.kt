@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files
 
 import org.assertj.core.api.Assertions.assertThat
@@ -20,10 +21,11 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.Parameter
 import org.junit.jupiter.params.ParameterizedClass
 import org.junit.jupiter.params.provider.ArgumentsSource
+import org.wtrzcinski.files.arguments.PathProvider
 import org.wtrzcinski.files.arguments.TestArgumentsProvider
-import org.wtrzcinski.files.arguments.TestPathProvider
-import org.wtrzcinski.files.common.Fixtures.newUniqueString
 import org.wtrzcinski.files.common.Fixtures.newAlphanumericString
+import org.wtrzcinski.files.common.Fixtures.newUniqueString
+import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.StandardOpenOption
 import kotlin.io.path.createParentDirectories
@@ -32,7 +34,7 @@ import kotlin.io.path.createParentDirectories
 @ArgumentsSource(TestArgumentsProvider::class)
 class FileSystemTest {
     @Parameter
-    lateinit var pathProvider: TestPathProvider
+    lateinit var pathProvider: PathProvider
 
     @Test
     fun `should create file`() {
@@ -125,5 +127,43 @@ class FileSystemTest {
 
         assertThat(Files.exists(givenFileName1)).isFalse()
         assertThat(Files.readString(givenFileName2)).isEqualTo(givenFileContent)
+    }
+
+    @Test
+    fun `should open new input stream`() {
+        val givenFilePath = pathProvider.newRandomPath()
+        val givenFileContent = newAlphanumericString(1024 * 10)
+        Files.writeString(givenFilePath, givenFileContent)
+
+        val actualStream = Files.newInputStream(givenFilePath)
+        val actualContent = actualStream.use {
+            actualStream.readAllBytes()
+        }
+
+        assertThat(String(actualContent)).isEqualTo(givenFileContent)
+    }
+
+    @Test
+    fun `should open input stream`() {
+        val givenFilePath = pathProvider.newRandomPath()
+        val givenFileContent = newAlphanumericString(1024 * 10)
+
+        val outputStream = Files.newOutputStream(givenFilePath)
+        outputStream.use {
+            outputStream.write(givenFileContent.toByteArray(Charsets.UTF_8))
+        }
+        val inputStream = Files.newInputStream(givenFilePath)
+        val actualContent = inputStream.use {
+            inputStream.readAllBytes()
+        }
+
+        assertThat(String(actualContent, Charsets.UTF_8)).isEqualTo(givenFileContent)
+    }
+
+    @Test
+    fun should() {
+        val allocate = ByteBuffer.allocate(8)
+        allocate.putLong(-1)
+        println(allocate)
     }
 }

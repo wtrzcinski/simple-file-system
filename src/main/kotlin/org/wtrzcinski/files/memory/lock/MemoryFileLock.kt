@@ -1,3 +1,7 @@
+package org.wtrzcinski.files.memory.lock
+
+import org.wtrzcinski.files.memory.channels.MemoryChannelMode
+
 /**
  * Copyright 2025 Wojciech Trzciński
  *
@@ -14,22 +18,23 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.bitmap
+interface MemoryFileLock {
+    fun acquire(mode: MemoryChannelMode): MemoryFileLock
 
-import org.wtrzcinski.files.memory.common.Segment
-
-interface Bitmap {
-    val reserved: BitmapReservedSegments
-
-    val free: BitmapFreeSegments
-
-    fun reserveBySize(byteSize: Long, prev: Long, name: String? = null): BitmapSegment
-
-    fun releaseAll(other: Segment)
+    fun release(mode: MemoryChannelMode)
 
     companion object {
-        fun of(memoryOffset: Long, memorySize: Long): BitmapGroup {
-            return BitmapGroup(memoryOffset = memoryOffset, memoryByteSize = memorySize)
+        inline fun <T> MemoryFileLock.withLock(block: () -> T): T {
+            return use(MemoryChannelMode.Write, block)
+        }
+
+        inline fun <T> MemoryFileLock.use(mode: MemoryChannelMode, block: () -> T): T {
+            try {
+                acquire(mode)
+                return block.invoke()
+            } finally {
+                release(mode)
+            }
         }
     }
 }

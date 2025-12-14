@@ -13,17 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.segment
 
 import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
 import java.nio.ByteBuffer
 
-class MemoryByteBuffer(
+internal class MemoryByteBuffer(
     val segments: MemorySegmentStore,
     val byteBuffer: ByteBuffer,
 ) {
 
-    fun skipAll() {
+    fun skipRemaining() {
         val limit = byteBuffer.limit()
         val position = byteBuffer.position()
         if (position != limit) {

@@ -15,15 +15,15 @@
  */
 package org.wtrzcinski.files.memory.segment.store
 
-import org.wtrzcinski.files.memory.bitmap.Bitmap
+import org.wtrzcinski.files.memory.bitmap.BitmapGroup
 import org.wtrzcinski.files.memory.segment.MemoryByteBuffer
 import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore.Companion.longByteSize
 import java.lang.foreign.MemorySegment
 import java.nio.ByteBuffer
 
-class LongMemoryMetadata(
+internal class LongMemoryMetadata(
     memory: MemorySegment,
-    bitmap: Bitmap,
+    bitmap: BitmapGroup,
     maxMemoryBlockByteSize: Int,
 ) : AbstractMemorySegmentStore(
     memory = memory,

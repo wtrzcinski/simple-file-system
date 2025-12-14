@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.common
 
 import org.wtrzcinski.files.memory.bitmap.BitmapSegment
@@ -64,15 +65,6 @@ interface Segment : SegmentOffset, SegmentSize, Comparable<Segment> {
             )
         }
         TODO("Not yet implemented")
-    }
-
-    fun withPrev(prev: Long): BitmapSegment {
-        return BitmapSegment(
-            start = start,
-            size = size,
-            prev = prev,
-            end = end,
-        )
     }
 
     override fun compareTo(other: Segment): Int {

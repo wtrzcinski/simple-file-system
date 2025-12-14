@@ -128,11 +128,12 @@ internal data class SimpleMemoryPath(
         TODO("Not yet implemented")
     }
 
-    override fun getFileName(): Path {
-        TODO("Not yet implemented")
+    override fun getNameCount(): Int {
+        val toStringList = toStringList()
+        return toStringList.size
     }
 
-    override fun getNameCount(): Int {
+    override fun getFileName(): Path? {
         TODO("Not yet implemented")
     }
 
@@ -164,11 +165,7 @@ internal data class SimpleMemoryPath(
         TODO("Not yet implemented")
     }
 
-    override fun register(
-        watcher: WatchService,
-        events: Array<out WatchEvent.Kind<*>>?,
-        vararg modifiers: WatchEvent.Modifier?
-    ): WatchKey {
+    override fun register(watcher: WatchService, events: Array<out WatchEvent.Kind<*>>, vararg modifiers: WatchEvent.Modifier?): WatchKey {
         TODO("Not yet implemented")
     }
 

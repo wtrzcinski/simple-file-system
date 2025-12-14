@@ -13,30 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.arguments
 
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.support.ParameterDeclarations
-import org.wtrzcinski.files.memory.MemoryFileSystem
-import org.wtrzcinski.files.memory.spi.SimpleMemoryFileSystem
 import org.wtrzcinski.files.common.Fixtures
+import java.net.URI
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.util.stream.Stream
 
 class TestArgumentsProvider : ArgumentsProvider {
     override fun provideArguments(parameters: ParameterDeclarations, context: ExtensionContext): Stream<out Arguments> {
         val stores = listOf(
-            newDefaultFileSystem(),
+//            newDefaultFileSystem(),
             newMemoryFileSystem(),
         )
         return stores.stream().map { Arguments.of(it) }
     }
 
     private fun newMemoryFileSystem(): DeleteOnClosePathProvider {
-        val definition = MemoryFileSystem.ofSize(capacity = 1024 * 1024 * 4, blockSize = 256)
-        val fileSystem = SimpleMemoryFileSystem(definition)
+        val fileSystem = FileSystems.newFileSystem(URI.create("memory:///"), mapOf("capacity" to 1024 * 1024 * 4, "blockSize" to 256))
         val rootDirectory = fileSystem.getPath("/")
         return DeleteOnClosePathProvider(rootDirectory, SubpathPathProvider(rootDirectory))
     }

@@ -13,21 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.segment
 
-import org.wtrzcinski.files.memory.segment.store.AbstractMemorySegmentStore
-import org.wtrzcinski.files.memory.channels.MemoryFsSeekableByteChannel
-import org.wtrzcinski.files.memory.channels.MemoryFsSeekableByteChannelMode
+import org.wtrzcinski.files.memory.channels.MemoryChannelMode
+import org.wtrzcinski.files.memory.channels.MemorySeekableByteChannel
 import org.wtrzcinski.files.memory.common.Segment
 import org.wtrzcinski.files.memory.common.SegmentOffset
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
+import org.wtrzcinski.files.memory.lock.MemoryFileLock
+import org.wtrzcinski.files.memory.segment.store.AbstractMemorySegmentStore
 
-class MemorySegment(
-    private val metadata: AbstractMemorySegmentStore,
+internal class MemorySegment(
+    private val segments: AbstractMemorySegmentStore,
     override var start: Long,
     initialBodySize: Long? = null,
     initialNextRef: Long? = null,
-) : Segment {
+) : Segment, AutoCloseable {
 
     init {
         if (initialBodySize != null) {
@@ -40,14 +41,14 @@ class MemorySegment(
         }
     }
 
-    override val size: Long get() = bodySize + metadata.headerSize
+    override val size: Long get() = bodySize + segments.headerSize
 
-    val headerSize: Long get() = metadata.headerSize
+    val headerSize: Long get() = segments.headerSize
 
     val bodySize: Long
         get() {
             val byteBuffer = newBodySizeBuffer()
-            return metadata.readMeta(byteBuffer = byteBuffer)
+            return segments.readMeta(byteBuffer = byteBuffer)
         }
 
     private var cachedBodyBuffer: MemoryByteBuffer? = null
@@ -63,28 +64,25 @@ class MemorySegment(
         return bodyBuffer.position()
     }
 
-    fun byteChannel(mode: MemoryFsSeekableByteChannelMode, locks: MemorySegmentStore): MemoryFsSeekableByteChannel {
-        return MemoryFsSeekableByteChannel(
+    fun newByteChannel(mode: MemoryChannelMode, lock: MemoryFileLock?): MemorySeekableByteChannel {
+        return MemorySeekableByteChannel(
             start = this,
-            locks = locks,
             mode = mode,
+            lock = lock,
         )
-    }
-
-    fun rewind() {
-        bodyBuffer.rewind()
     }
 
     fun remaining(): Int {
         return bodyBuffer.remaining()
     }
 
-    fun skipAll() {
-        bodyBuffer.skipAll()
+    fun skipRemaining() {
+        bodyBuffer.skipRemaining()
     }
 
     fun reserveNext(): MemorySegment {
-        val next = metadata.reserveSegment(prevOffset = start)
+        val next = segments.reserveSegment(prevOffset = start)
+        require(next.start != this.start)
         val nextOffset = next.start
         val byteBuffer = newNextRefBuffer()
         byteBuffer.writeMeta(value = nextOffset)
@@ -94,7 +92,7 @@ class MemorySegment(
     fun readNext(): MemorySegment? {
         val offset = this.readNextRef()
         if (offset != null && offset.isValid()) {
-            return metadata.findSegment(offset = offset)
+            return segments.findSegment(offset = offset)
         }
         return null
     }
@@ -109,53 +107,53 @@ class MemorySegment(
     }
 
     fun resize(newBodySize: Int) {
-        if (newBodySize == 0) {
-            metadata.releaseAll(other = this)
-        } else {
-            val prevByteSize = bodySize.toInt()
-            if (newBodySize != prevByteSize) {
-                val divide = divide(newBodySize + metadata.headerSize)
-                metadata.releaseAll(other = divide.second)
+        val prevByteSize = bodySize.toInt()
+        if (newBodySize != prevByteSize) {
+            val divide = divide(newBodySize + segments.headerSize)
+            segments.releaseAll(other = divide.second)
 
-                val byteBuffer = newBodySizeBuffer()
-                byteBuffer.writeMeta(value = newBodySize.toLong())
-            }
+            val byteBuffer = newBodySizeBuffer()
+            byteBuffer.writeMeta(value = newBodySize.toLong())
         }
     }
 
-    fun flush() {
-
-    }
-
     private fun newBodySizeBuffer(): MemoryByteBuffer {
-        val result = metadata.buffer(
+        val result = segments.buffer(
             offset = start,
-            size = metadata.bodySizeHeader
+            size = segments.bodySizeHeader
         )
         result.clear()
         return result
     }
 
     private fun newNextRefBuffer(): MemoryByteBuffer {
-        val result = metadata.buffer(
-            offset = start + metadata.bodySizeHeader,
-            size = metadata.nextRefHeaderSize,
+        val result = segments.buffer(
+            offset = start + segments.bodySizeHeader,
+            size = segments.nextRefHeaderSize,
         )
         result.clear()
         return result
     }
 
     private fun newBodyBuffer(): MemoryByteBuffer {
-        val result = metadata.buffer(
-            offset = start + metadata.bodySizeHeader + metadata.nextRefHeaderSize,
+        val result = segments.buffer(
+            offset = start + segments.bodySizeHeader + segments.nextRefHeaderSize,
             size = bodySize,
         )
         result.clear()
         return result
     }
 
+    fun release() {
+        this.segments.releaseAll(this)
+        this.close()
+    }
+
+    override fun close() {
+    }
+
     override fun toString(): String {
         val next = readNextRef()?.start
-        return "MemoryFsSegment(startOffset=$start, endOffset=$end, size=$size, headerSize=$headerSize, bodySize=$bodySize, position=$position, next=$next)"
+        return "${javaClass.simpleName}(start=$start, end=$end, size=$size, headerSize=$headerSize, bodySize=$bodySize, position=$position, next=$next)"
     }
 }

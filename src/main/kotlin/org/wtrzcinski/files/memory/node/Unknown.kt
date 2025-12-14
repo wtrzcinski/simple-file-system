@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.node
 
 import org.wtrzcinski.files.memory.common.SegmentOffset
@@ -21,29 +22,33 @@ import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
 internal class Unknown(
     segments: MemorySegmentStore,
     nodeRef: SegmentOffset = NodeRef(-1),
-    name: String,
+    dataRef: SegmentOffset = SegmentOffset.of(-1),
     modified: Long = 0L,
     created: Long = 0L,
     accessed: Long = 0L,
-    dataRef: SegmentOffset = SegmentOffset.of(-1),
+    permissions: String = "-".repeat(9),
+    name: String,
 ) : Node(
     segments = segments,
     nodeRef = nodeRef,
+    dataRef = dataRef,
     fileType = NodeType.Unknown,
-    name = name,
+    permissions = permissions,
     modified = modified,
     created = created,
     accessed = accessed,
-    dataRef = dataRef,
+    name = name,
 ) {
     override fun withNodeRef(nodeRef: NodeRef): Node {
         return Unknown(
             segments = segments,
             nodeRef = nodeRef,
-            name = name,
+            dataRef = dataRef,
             modified = modified,
             created = created,
-            dataRef = dataRef,
+            accessed = accessed,
+            permissions = permissions,
+            name = name,
         )
     }
 }

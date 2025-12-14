@@ -15,16 +15,16 @@
  */
 package org.wtrzcinski.files.memory.segment.store
 
-import org.wtrzcinski.files.memory.bitmap.Bitmap
+import org.wtrzcinski.files.memory.bitmap.BitmapGroup
 import org.wtrzcinski.files.memory.common.Segment
 import org.wtrzcinski.files.memory.common.SegmentOffset
+import org.wtrzcinski.files.memory.lock.MemoryFileLock
 import org.wtrzcinski.files.memory.segment.MemoryByteBuffer
 import org.wtrzcinski.files.memory.segment.MemorySegment
 import java.nio.ByteBuffer
-import java.util.concurrent.locks.ReentrantLock
 
 @Suppress("MayBeConstant")
-interface MemorySegmentStore {
+internal interface MemorySegmentStore {
 
     fun buffer(offset: Long, size: Long): MemoryByteBuffer
 
@@ -34,19 +34,17 @@ interface MemorySegmentStore {
 
     fun findSegment(offset: SegmentOffset): MemorySegment
 
-    fun reserveSegment(prevOffset: Long = -1): MemorySegment
+    fun reserveSegment(bodySize: Long = -1, prevOffset: Long = -1, name: String? = null): MemorySegment
 
     fun releaseAll(other: Segment)
 
-    fun lock(offset: SegmentOffset): ReentrantLock
-
-    fun unlock(offset: SegmentOffset)
+    fun lock(offset: SegmentOffset): MemoryFileLock
 
     companion object {
         val intByteSize: Long = 4
         val longByteSize: Long = 8
 
-        fun of(memory: java.lang.foreign.MemorySegment, bitmap: Bitmap, maxMemoryBlockByteSize: Int): AbstractMemorySegmentStore {
+        fun of(memory: java.lang.foreign.MemorySegment, bitmap: BitmapGroup, maxMemoryBlockByteSize: Int): AbstractMemorySegmentStore {
             if (memory.byteSize() > Int.MAX_VALUE) {
                 return LongMemoryMetadata(
                     memory = memory,

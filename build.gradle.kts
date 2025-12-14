@@ -20,7 +20,7 @@ plugins {
 
 val javaVersion = 24
 group = "org.wtrzcinski.files"
-version = "2025.12.01"
+version = "0.2.0"
 
 plugins.withType<JavaPlugin> {
     the<JavaPluginExtension>().apply {
@@ -52,6 +52,7 @@ repositories {
 
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect:2.2.21")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.2.21")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")

@@ -15,18 +15,18 @@
  */
 package org.wtrzcinski.files.memory.spi
 
-import org.wtrzcinski.files.memory.MemoryFileSystem
+import org.wtrzcinski.files.memory.MemoryFileSystemFacade
 import java.io.File
 import java.nio.file.*
 import java.nio.file.attribute.UserPrincipalLookupService
 import java.nio.file.spi.FileSystemProvider
 
 internal data class SimpleMemoryFileSystem(
-    val delegate: MemoryFileSystem,
-    val provider: SimpleMemoryFileSystemProvider = SimpleMemoryFileSystemProvider(delegate),
+    val context: MemoryFileSystemFacade,
+    val provider: SimpleMemoryFileSystemProvider = SimpleMemoryFileSystemProvider(context),
 ) : FileSystem() {
 
-    val root: SimpleMemoryPath = SimpleMemoryPath(this, null, { delegate.root() })
+    val root: SimpleMemoryPath = SimpleMemoryPath(this, null, { context.root() })
 
     override fun provider(): FileSystemProvider {
         return provider
@@ -53,7 +53,7 @@ internal data class SimpleMemoryFileSystem(
     }
 
     override fun close() {
-        TODO("Not yet implemented")
+        context.close()
     }
 
     override fun isOpen(): Boolean {

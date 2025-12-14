@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.common
 
 import java.util.concurrent.atomic.AtomicInteger
@@ -26,13 +27,13 @@ object Fixtures {
 
     fun newUniqueString(): String {
         val millis = System.currentTimeMillis()
-        val counter = counter.getAndIncrement()
+        val counter = counter.incrementAndGet()
         return "test-string-$millis-$counter"
     }
 
     fun newTempDirectoryName(): String {
         val millis = System.currentTimeMillis()
-        val counter = counter.getAndIncrement()
+        val counter = counter.incrementAndGet()
         val directory = "test-dir-$millis-$counter"
         return directory
     }

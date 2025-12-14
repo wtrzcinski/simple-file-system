@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.arguments
 
 import java.nio.file.Files
@@ -21,8 +22,8 @@ import kotlin.io.path.isDirectory
 
 class DeleteOnClosePathProvider(
     private val file: Path,
-    private val delegate: TestPathProvider,
-) : TestPathProvider by delegate {
+    private val delegate: PathProvider,
+) : PathProvider by delegate {
 
     override fun close() {
         delegate.close()

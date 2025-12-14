@@ -16,15 +16,16 @@
 
 package org.wtrzcinski.files.memory.spi
 
-import org.wtrzcinski.files.memory.MemoryFileSystem
-import org.wtrzcinski.files.memory.channels.MemoryFsSeekableByteChannelMode.*
+import org.wtrzcinski.files.memory.MemoryFileSystemFacade
+import org.wtrzcinski.files.memory.channels.MemoryChannelMode.*
+import org.wtrzcinski.files.memory.channels.MemoryFileChannel
+import org.wtrzcinski.files.memory.channels.MemorySeekableByteChannel
 import org.wtrzcinski.files.memory.node.Directory
 import org.wtrzcinski.files.memory.node.Unknown
 import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.channels.ReadableByteChannel
-import java.nio.channels.SeekableByteChannel
 import java.nio.channels.WritableByteChannel
 import java.nio.file.*
 import java.nio.file.attribute.BasicFileAttributes
@@ -36,17 +37,15 @@ import kotlin.use
 
 @Suppress("UNCHECKED_CAST")
 internal class SimpleMemoryFileSystemProvider(
-    val fs: MemoryFileSystem,
+    val fs: MemoryFileSystemFacade? = null,
 ) : FileSystemProvider() {
-
-    private val filesystems: MutableMap<SimpleMemoryPath, SimpleMemoryFileSystem> = ConcurrentHashMap()
-
     //    memory:/c:/bar/foo.txt"
     override fun getScheme(): String {
         return "memory"
     }
 
     override fun delete(path: Path) {
+        require(fs != null)
         path as SimpleMemoryPath
 
         val node = path.node
@@ -60,25 +59,27 @@ internal class SimpleMemoryFileSystemProvider(
         path: Path,
         options: Set<OpenOption?>,
         vararg attrs: FileAttribute<*>
-    ): SeekableByteChannel {
+    ): MemorySeekableByteChannel {
         path as SimpleMemoryPath
+
+        require(fs != null)
 
         val mode = if (options.contains(StandardOpenOption.APPEND)) {
             Append
         } else if (options.contains(StandardOpenOption.TRUNCATE_EXISTING)) {
-            Upsert
+            Write
         } else if (options.contains(StandardOpenOption.WRITE)) {
-            Upsert
+            Write
         } else {
             Read
         }
         val parent = path.parent?.node
         val child = path.node
-        return fs.newByteChannel(directory = parent, node = child, mode = mode)
+        return fs.newByteChannel(directory = parent, childName = child.name, mode = mode)
     }
 
     override fun newFileChannel(path: Path, options: Set<OpenOption>, vararg attrs: FileAttribute<*>): FileChannel {
-        return super.newFileChannel(path, options, *attrs)
+        return MemoryFileChannel(newByteChannel(path, options, *attrs))
     }
 
     override fun isSameFile(path1: Path, path2: Path): Boolean {
@@ -99,7 +100,7 @@ internal class SimpleMemoryFileSystemProvider(
 
         val pathNode = path.node
         if (!pathNode.exists()) {
-            throw NoSuchFileException(toString());
+            throw NoSuchFileException(toString())
         }
         return type.cast(SimpleMemoryFileAttribute(pathNode))
     }
@@ -113,7 +114,7 @@ internal class SimpleMemoryFileSystemProvider(
 
         val pathNode = path.node
         if (!pathNode.exists()) {
-            throw NoSuchFileException(toString());
+            throw NoSuchFileException(toString())
         }
         return type.cast(SimpleMemoryFileAttribute(pathNode))
     }
@@ -123,7 +124,7 @@ internal class SimpleMemoryFileSystemProvider(
 
         val pathNode = path.node
         if (!pathNode.exists()) {
-            throw NoSuchFileException(toString());
+            throw NoSuchFileException(toString())
         }
     }
 
@@ -137,6 +138,8 @@ internal class SimpleMemoryFileSystemProvider(
     }
 
     override fun createDirectory(dir: Path, vararg attrs: FileAttribute<*>) {
+        require(fs != null)
+
         dir as SimpleMemoryPath
 
         val parent = dir.parent
@@ -173,16 +176,47 @@ internal class SimpleMemoryFileSystemProvider(
         copy(sourceByteBuffer, targetByteBuffer)
     }
 
-    override fun newFileSystem(uri: URI, env: Map<String?, *>): FileSystem {
-        TODO("Not yet implemented")
+    override fun getFileSystem(uri: URI): SimpleMemoryFileSystem {
+        val system = filesystems[uri.toString()]
+        return system ?: throw FileSystemNotFoundException()
     }
 
-    override fun getFileSystem(uri: URI?): FileSystem {
-        TODO("Not yet implemented")
+    override fun newFileSystem(uri: URI, env: Map<String?, *>): FileSystem {
+        val capacity: Long = readSize(env["capacity"]) ?: throw IllegalArgumentException("Missing capacity parameter")
+        val blockSize: Long = readSize(env["blockSize"])?.toString()?.toLong() ?: (1024 * 4)
+
+        val context = MemoryFileSystemFacade.ofSize(capacity = capacity, blockSize = blockSize)
+        val fileSystem = SimpleMemoryFileSystem(context)
+        filesystems["memory:///"] = fileSystem
+        return fileSystem
+    }
+
+    private fun readSize(any: Any?): Long? {
+        val toString = any?.toString()?.lowercase()
+        if (toString == null) {
+            return null
+        }
+        try {
+            return toString.toLong()
+        } catch (e: NumberFormatException) {
+            if (toString.endsWith("kb")) {
+                val take = toString.take(toString.length - 2)
+                return take.toLong() * 1024
+            } else if (toString.endsWith("mb")) {
+                val take = toString.take(toString.length - 2)
+                return take.toLong() * 1024 * 1024
+            } else if (toString.endsWith("gb")) {
+                val take = toString.take(toString.length - 2)
+                return take.toLong() * 1024 * 1024 * 1024
+            } else {
+                TODO("Not yet implemented")
+            }
+        }
     }
 
     override fun getPath(uri: URI): Path {
-        TODO("Not yet implemented")
+        val fileSystem = getFileSystem(uri)
+        return fileSystem.getPath(uri.path)
     }
 
     override fun isHidden(path: Path): Boolean {
@@ -193,24 +227,17 @@ internal class SimpleMemoryFileSystemProvider(
         TODO("Not yet implemented")
     }
 
-    override fun readAttributes(
-        path: Path?,
-        attributes: String?,
-        vararg options: LinkOption?
-    ): Map<String?, Any?>? {
+    override fun readAttributes(path: Path?, attributes: String?, vararg options: LinkOption?): Map<String?, Any?> {
         TODO("Not yet implemented")
     }
 
-    override fun setAttribute(
-        path: Path?,
-        attribute: String?,
-        value: Any?,
-        vararg options: LinkOption?
-    ) {
+    override fun setAttribute(path: Path?, attribute: String?, value: Any?, vararg options: LinkOption?) {
         TODO("Not yet implemented")
     }
 
     companion object {
+        private val filesystems = ConcurrentHashMap<String, SimpleMemoryFileSystem>()
+
         private fun copy(source: ReadableByteChannel, target: WritableByteChannel) {
             source.use { input ->
                 target.use { output ->

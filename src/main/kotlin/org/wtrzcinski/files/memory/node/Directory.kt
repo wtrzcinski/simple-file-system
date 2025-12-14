@@ -13,20 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.node
 
-import org.wtrzcinski.files.memory.channels.MemoryFsSeekableByteChannelMode
 import org.wtrzcinski.files.memory.common.SegmentOffset
 import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
 
 internal class Directory(
     segments: MemorySegmentStore,
     nodeRef: SegmentOffset = NodeRef(-1),
-    name: String,
+    dataRef: SegmentOffset,
     modified: Long = 0L,
     created: Long = 0L,
     accessed: Long = 0L,
-    dataRef: SegmentOffset = SegmentOffset.of(-1),
+    permissions: String = "-".repeat(9),
+    name: String,
 ) : Node(
     segments = segments,
     nodeRef = nodeRef,
@@ -35,16 +36,19 @@ internal class Directory(
     modified = modified,
     created = created,
     accessed = accessed,
+    permissions = permissions,
     dataRef = dataRef,
 ) {
     override fun withNodeRef(nodeRef: NodeRef): Node {
         return Directory(
             segments = segments,
             nodeRef = nodeRef,
-            name = name,
+            dataRef = dataRef,
             modified = modified,
             created = created,
-            dataRef = dataRef,
+            accessed = accessed,
+            permissions = permissions,
+            name = name,
         )
     }
 
@@ -53,7 +57,7 @@ internal class Directory(
         children.addAll(findChildIds())
         children.add(childRef.start)
         children.sort()
-        NodeStore.updateDirectory(segments, nodeRef, dataRef, children)
+        NodeStore.update(segments, nodeRef, dataRef, children)
     }
 
     fun removeChildByName(name: String) {
@@ -64,7 +68,7 @@ internal class Directory(
         val children = mutableListOf<Long>()
         children.addAll(findChildIds)
         children.remove(findChildByName.nodeRef.start)
-        NodeStore.updateDirectory(segments, nodeRef, dataRef, children)
+        NodeStore.update(segments, nodeRef, dataRef, children)
     }
 
     fun findChildByName(name: String): Node? {
@@ -77,12 +81,9 @@ internal class Directory(
     }
 
     fun findChildIds(): Sequence<Long> {
-        if (this.dataRef.isValid()) {
-            val dataNode = segments.findSegment(this.dataRef)
-            val dataByteChannel = dataNode.byteChannel(MemoryFsSeekableByteChannelMode.Read, segments)
-            dataByteChannel.use {
-                return dataByteChannel.readRefs()
-            }
+        val findData = this.findData()
+        if (findData != null) {
+            return NodeStore.readChildren(segments, nodeRef, findData)
         }
         return sequenceOf()
     }

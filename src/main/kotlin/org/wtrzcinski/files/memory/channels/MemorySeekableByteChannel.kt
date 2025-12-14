@@ -13,48 +13,60 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.channels
 
+import org.wtrzcinski.files.memory.channels.MemoryChannelMode.Read
+import org.wtrzcinski.files.memory.common.SegmentOffset
+import org.wtrzcinski.files.memory.lock.MemoryFileLock
 import org.wtrzcinski.files.memory.segment.MemorySegment
 import org.wtrzcinski.files.memory.segment.MemorySegmentIterator
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
 import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore.Companion.intByteSize
 import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore.Companion.longByteSize
-import org.wtrzcinski.files.memory.channels.MemoryFsSeekableByteChannelMode.Read
-import org.wtrzcinski.files.memory.common.SegmentOffset
+import java.lang.AutoCloseable
 import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.plusAssign
 
-// todo wojtek implement FileChannel
-data class MemoryFsSeekableByteChannel(
+@OptIn(ExperimentalAtomicApi::class)
+internal data class MemorySeekableByteChannel(
     val start: MemorySegment,
-    val locks: MemorySegmentStore,
-    val mode: MemoryFsSeekableByteChannelMode = Read,
-) : SeekableByteChannel {
+    val lock: MemoryFileLock?,
+    val mode: MemoryChannelMode = Read,
+) : SeekableByteChannel, AutoCloseable {
 
-    @Volatile
-    private var closed: Boolean = false
+    private var position = AtomicLong(0)
 
-    @Volatile
-    private var position: Long = 0
+    private val closed = AtomicBoolean(false)
 
-    private val segments = MemorySegmentIterator(start, mode)
+    private val segments = MemorySegmentIterator(start = start, mode = mode)
 
     fun offset(): SegmentOffset {
         return segments.offset()
     }
 
     override fun isOpen(): Boolean {
-        return !closed
+        return !closed.load()
     }
 
     override fun close() {
-        this.closed = true
-        if (mode.write) {
-            val current = segments.current()
-            val newBodySize = current.position
-            current.resize(newBodySize)
-            current.flush()
+        if (isOpen()) {
+            try {
+                this.closed.exchange(true)
+
+                if (this.mode.write) {
+                    val current = segments.current()
+                    val newBodySize = current.position
+                    current.resize(newBodySize)
+                    current.close()
+                }
+                segments.close()
+            } finally {
+                lock?.release(mode)
+            }
         }
     }
 
@@ -66,47 +78,32 @@ data class MemoryFsSeekableByteChannel(
     }
 
     override fun position(): Long {
-        return position
+        return position.load()
     }
 
-    override fun position(newPosition: Long): SeekableByteChannel {
-        if (newPosition != this.position) {
+    override fun position(newPosition: Long): MemorySeekableByteChannel {
+        if (newPosition != this.position.load()) {
             TODO("Not yet implemented")
         }
         return this
     }
 
-    override fun truncate(size: Long): SeekableByteChannel {
-        TODO("Not yet implemented")
-    }
-
-    fun skipAll() {
+    fun skipRemaining() {
         checkAccessible()
 
-        while (segments.hasNext()) {
-            segments.next()
-        }
-        val current = segments.current()
-        current.skipAll()
+        segments.skipRemaining()
     }
 
     fun skipInt() {
         readInt()
     }
 
-    fun skipString() {
-        readString()
-    }
-
-    fun skipLong() {
-        readLong()
-    }
-
     fun readRefs(): Sequence<Long> {
         val existing = mutableListOf<Long>()
         val count = readInt()
         repeat(count) {
-            existing.add(readLong())
+            val element = readLong()
+            existing.add(element)
         }
         return existing.asSequence()
     }
@@ -174,7 +171,7 @@ data class MemoryFsSeekableByteChannel(
             return redNext
         } else if (remaining < left) {
             current.bodyBuffer.get(dst, dstOffset, remaining)
-            position += remaining
+            position += remaining.toLong()
             val next = next()
             if (!next) {
                 return remaining
@@ -183,7 +180,7 @@ data class MemoryFsSeekableByteChannel(
             return remaining + redNext
         } else {
             current.bodyBuffer.get(dst, dstOffset, left)
-            position += left
+            position += left.toLong()
             return left
         }
     }
@@ -203,12 +200,6 @@ data class MemoryFsSeekableByteChannel(
         other.get(byteArray)
         write(byteArray = byteArray, offset = 0)
         return remaining
-    }
-
-    fun writeRef(offset: SegmentOffset) {
-        checkAccessible()
-
-        writeLong(offset.start)
     }
 
     fun writeLong(other: Long) {
@@ -251,25 +242,25 @@ data class MemoryFsSeekableByteChannel(
         val remaining = current.bodyBuffer.remaining()
         if (remaining < toWrite) {
             current.bodyBuffer.put(byteArray, offset, remaining)
-            position += remaining
+            position += remaining.toLong()
             next()
             write(byteArray, offset + remaining)
         } else {
             current.bodyBuffer.put(byteArray, offset, toWrite)
-            position += toWrite
+            position += toWrite.toLong()
         }
     }
 
     private fun next(): Boolean {
-        val stackTrace = Thread.currentThread().stackTrace
-        if (stackTrace.size > 200) {
-            TODO("Not yet implemented")
-        }
         return segments.next() != null
     }
 
+    override fun truncate(size: Long): MemorySeekableByteChannel {
+        TODO("Not yet implemented")
+    }
+
     private fun checkAccessible() {
-        if (closed) {
+        if (!isOpen) {
             throw ChannelInvalidStateException()
         }
     }

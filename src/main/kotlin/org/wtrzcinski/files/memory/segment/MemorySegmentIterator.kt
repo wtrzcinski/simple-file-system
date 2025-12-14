@@ -13,20 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.segment
 
-import org.wtrzcinski.files.memory.channels.MemoryFsSeekableByteChannelMode
+import org.wtrzcinski.files.memory.channels.ChannelInvalidStateException
+import org.wtrzcinski.files.memory.channels.MemoryChannelMode
 import org.wtrzcinski.files.memory.common.SegmentOffset
+import org.wtrzcinski.files.memory.lock.MemoryFileLock
+import java.lang.AutoCloseable
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.plusAssign
 
 @OptIn(ExperimentalAtomicApi::class)
-class MemorySegmentIterator(
+internal class MemorySegmentIterator(
     start: MemorySegment,
-    val mode: MemoryFsSeekableByteChannelMode,
-) : Iterator<MemorySegment?> {
+    val mode: MemoryChannelMode,
+) : Iterator<MemorySegment?>, AutoCloseable {
+
+    private val closed = AtomicBoolean(false)
 
     private val segments: CopyOnWriteArrayList<MemorySegment> = CopyOnWriteArrayList()
 
@@ -36,11 +43,17 @@ class MemorySegmentIterator(
         segments.add(start)
     }
 
+    fun isOpen(): Boolean {
+        return !closed.load()
+    }
+
     fun offset(): SegmentOffset {
         return segments.first()
     }
 
     fun current(): MemorySegment {
+        checkAccessible()
+
         return segments.last()
     }
 
@@ -59,26 +72,26 @@ class MemorySegmentIterator(
         return refs
     }
 
-    override fun next(): MemorySegment? {
+    fun skipRemaining() {
+        while (hasNext()) {
+            skip()
+        }
+        val current = current()
+        current.skipRemaining()
+    }
+
+    fun skip(): MemorySegment? {
+        checkAccessible()
+
         if (currentIndex.load() >= segments.size) {
             return null
         }
 
         val current = segments.last()
-        val nextRef = current.readNext()
-        if (nextRef != null) {
-            if (this.mode.write) {
-                TODO("Not yet implemented")
-            } else {
-                segments.add(nextRef)
-                currentIndex += 1
-                return nextRef
-            }
-        } else {
-            if (this.mode.write) {
-                val newBodySize = current.position
-                current.resize(newBodySize)
-                val nextRef = current.reserveNext()
+        try {
+            val nextRef = current.readNext()
+            if (nextRef != null) {
+                nextRef.skipRemaining()
                 segments.add(nextRef)
                 currentIndex += 1
                 return nextRef
@@ -86,6 +99,48 @@ class MemorySegmentIterator(
                 currentIndex += 1
                 return null
             }
+        } finally {
+            current.close()
+        }
+    }
+
+    override fun next(): MemorySegment? {
+        checkAccessible()
+
+        if (currentIndex.load() >= segments.size) {
+            return null
+        }
+
+        val current = segments.last()
+        try {
+            val nextRef = current.readNext()
+            if (nextRef != null) {
+                if (this.mode.write) {
+                    val newBodySize = current.position
+                    current.resize(newBodySize)
+                    segments.add(nextRef)
+                    currentIndex += 1
+                    return nextRef
+                } else {
+                    segments.add(nextRef)
+                    currentIndex += 1
+                    return nextRef
+                }
+            } else {
+                if (this.mode.write) {
+                    val newBodySize = current.position
+                    current.resize(newBodySize)
+                    val nextRef = current.reserveNext()
+                    segments.add(nextRef)
+                    currentIndex += 1
+                    return nextRef
+                } else {
+                    currentIndex += 1
+                    return null
+                }
+            }
+        } finally {
+            current.close()
         }
     }
 
@@ -93,5 +148,20 @@ class MemorySegmentIterator(
         val current = segments.last()
         val nextRef = current.readNextRef()
         return nextRef != null
+    }
+
+    override fun close() {
+        if (isOpen()) {
+            closed.exchange(true)
+            for (it in segments) {
+                it.close()
+            }
+        }
+    }
+
+    private fun checkAccessible() {
+        if (!isOpen()) {
+            throw ChannelInvalidStateException()
+        }
     }
 }

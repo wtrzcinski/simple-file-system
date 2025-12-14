@@ -13,19 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.arguments
 
+import org.wtrzcinski.files.common.Fixtures.newUniqueString
 import java.nio.file.Path
 
-/**
- * SimpleFileSystem is simplified version of java FileSystem.
- *
- *  @see Path
- *  @see java.nio.file.FileSystem
- *  @see java.nio.file.Files
- **/
-interface TestPathProvider : AutoCloseable {
+interface PathProvider : AutoCloseable {
 
     fun getPath(path: String, vararg more: String): Path
 
+    fun newRandomPath(): Path {
+        return getPath(newUniqueString())
+    }
 }

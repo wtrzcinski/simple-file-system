@@ -14,22 +14,11 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.bitmap
+package org.wtrzcinski.files.memory.channels
 
-import org.wtrzcinski.files.memory.common.Segment
-
-interface Bitmap {
-    val reserved: BitmapReservedSegments
-
-    val free: BitmapFreeSegments
-
-    fun reserveBySize(byteSize: Long, prev: Long, name: String? = null): BitmapSegment
-
-    fun releaseAll(other: Segment)
-
-    companion object {
-        fun of(memoryOffset: Long, memorySize: Long): BitmapGroup {
-            return BitmapGroup(memoryOffset = memoryOffset, memoryByteSize = memorySize)
-        }
-    }
+enum class MemoryChannelMode(val write: Boolean) {
+    Read(false),
+    Append(true),
+    Create(true),
+    Write(true),
 }

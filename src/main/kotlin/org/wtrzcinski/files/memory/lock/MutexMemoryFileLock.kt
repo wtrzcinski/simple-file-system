@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.bitmap
+package org.wtrzcinski.files.memory.lock
 
-import org.wtrzcinski.files.memory.common.Segment
+import org.wtrzcinski.files.memory.channels.MemoryChannelMode
+import org.wtrzcinski.files.memory.common.SegmentOffset
+import java.util.concurrent.locks.ReentrantLock
 
-interface Bitmap {
-    val reserved: BitmapReservedSegments
+internal open class MutexMemoryFileLock(
+    val offset: SegmentOffset = SegmentOffset.of(-1),
+    private val reentrantLock: ReentrantLock = ReentrantLock(true),
+) : MemoryFileLock {
+    override fun acquire(mode: MemoryChannelMode): MutexMemoryFileLock {
+        reentrantLock.lock()
+        return this
+    }
 
-    val free: BitmapFreeSegments
-
-    fun reserveBySize(byteSize: Long, prev: Long, name: String? = null): BitmapSegment
-
-    fun releaseAll(other: Segment)
-
-    companion object {
-        fun of(memoryOffset: Long, memorySize: Long): BitmapGroup {
-            return BitmapGroup(memoryOffset = memoryOffset, memoryByteSize = memorySize)
-        }
+    override fun release(mode: MemoryChannelMode) {
+        reentrantLock.unlock()
     }
 }

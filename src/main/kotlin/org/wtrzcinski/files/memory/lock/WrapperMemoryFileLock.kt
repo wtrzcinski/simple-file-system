@@ -13,10 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.wtrzcinski.files.memory.channels
 
-enum class MemoryFsSeekableByteChannelMode(val write: Boolean) {
-    Read(false),
-    Append(true),
-    Upsert(true),
+package org.wtrzcinski.files.memory.lock
+
+import org.wtrzcinski.files.memory.channels.MemoryChannelMode
+
+class WrapperMemoryFileLock(
+    private val path: List<MemoryFileLock>,
+) : MemoryFileLock {
+    override fun acquire(mode: MemoryChannelMode): MemoryFileLock {
+        for (lock in path) {
+            lock.acquire(mode)
+        }
+        return this
+    }
+
+    override fun release(mode: MemoryChannelMode) {
+        for (it in path) {
+            it.release(mode)
+        }
+    }
 }

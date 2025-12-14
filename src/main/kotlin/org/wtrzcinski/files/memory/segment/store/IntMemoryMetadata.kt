@@ -13,18 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.segment.store
 
-import org.wtrzcinski.files.memory.bitmap.Bitmap
+import org.wtrzcinski.files.memory.bitmap.BitmapGroup
 import org.wtrzcinski.files.memory.segment.MemoryByteBuffer
 import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore.Companion.intByteSize
 import java.lang.foreign.MemorySegment
 import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
 
-class IntMemoryMetadata(
+internal class IntMemoryMetadata(
     memory: MemorySegment,
-    bitmap: Bitmap,
+    bitmap: BitmapGroup,
     maxMemoryBlockByteSize: Int,
 ) : AbstractMemorySegmentStore(
     memory = memory,

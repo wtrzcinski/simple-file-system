@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.node
 
 import org.wtrzcinski.files.memory.common.SegmentOffset
@@ -22,12 +23,23 @@ internal abstract class Node(
     val segments: MemorySegmentStore,
     val nodeRef: SegmentOffset = SegmentOffset.of(-1),
     val fileType: NodeType = NodeType.Unknown,
-    val name: String = "",
+    val dataRef: SegmentOffset = SegmentOffset.of(-1),
     val modified: Long = 0L,
     val created: Long = 0L,
     val accessed: Long = 0L,
-    val dataRef: SegmentOffset = SegmentOffset.of(-1),
+    val permissions: String = "-".repeat(9),
+    val name: String = "",
 ) {
+    fun findData(): SegmentOffset? {
+        val read = NodeStore.read(segments, Node::class, nodeRef)
+        val dataRef = read.dataRef
+        return if (dataRef.isValid()) {
+            dataRef
+        } else {
+            null
+        }
+    }
+
     fun exists(): Boolean {
         return nodeRef.isValid()
     }
@@ -35,10 +47,14 @@ internal abstract class Node(
     fun delete() {
         if (dataRef.isValid()) {
             val dataSegment = segments.findSegment(dataRef)
-            segments.releaseAll(dataSegment)
+            dataSegment.use {
+                dataSegment.release()
+            }
         }
         val fileSegment = segments.findSegment(nodeRef)
-        segments.releaseAll(fileSegment)
+        fileSegment.use {
+            fileSegment.release()
+        }
     }
 
     abstract fun withNodeRef(nodeRef: NodeRef): Node

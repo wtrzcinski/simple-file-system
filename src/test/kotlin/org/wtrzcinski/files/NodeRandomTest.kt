@@ -13,24 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
-import org.wtrzcinski.files.memory.MemoryFileSystem
+import org.wtrzcinski.files.memory.MemoryFileSystemFacade
 import java.lang.foreign.MemorySegment
 import java.util.concurrent.TimeUnit
 
 @Suppress("MayBeConstant")
-internal class NodePerformanceTest {
+internal class NodeRandomTest {
     companion object {
         val megabytes = 10
         val memoryBlockSize = 256
         val maxStringSize = memoryBlockSize * 2
         val memory: MemorySegment = MemorySegment.ofArray(ByteArray(1024 * 1024 * megabytes))
-        val fs = MemoryFileSystem(memory = memory, blockSize = memoryBlockSize)
+        val fs = MemoryFileSystemFacade(memory = memory, blockSize = memoryBlockSize)
         val repeats = megabytes * 1_000
     }
 
@@ -44,7 +45,7 @@ internal class NodePerformanceTest {
 
     @Test
     @Timeout(60, unit = TimeUnit.SECONDS)
-    fun performance() {
+    fun `should create random files`() {
         repeat(repeats) {
             NodeTest.createRandomFile(fs.segments, maxStringSize)
         }

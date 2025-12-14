@@ -19,7 +19,7 @@ package org.wtrzcinski.files
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.wtrzcinski.files.common.Fixtures.newAlphanumericString
-import org.wtrzcinski.files.memory.MemoryFileSystem
+import org.wtrzcinski.files.memory.MemoryFileSystemFacade
 import org.wtrzcinski.files.memory.node.Node
 import org.wtrzcinski.files.memory.node.NodeRef
 import org.wtrzcinski.files.memory.node.NodeStore
@@ -31,8 +31,8 @@ import kotlin.random.Random
 internal class NodeTest {
 
     @Test
-    fun should() {
-        val memory = MemoryFileSystem(MemorySegment.ofArray(ByteArray(1024)), blockSize = 24)
+    fun `should create files`() {
+        val memory = MemoryFileSystemFacade(MemorySegment.ofArray(ByteArray(1024)), blockSize = 24)
         val givenRootNode = memory.root()
         val rootId = givenRootNode.nodeRef
         val givenFileNode1 = newFileNode(memory.segments, "file1-file1-file1")
@@ -44,8 +44,8 @@ internal class NodeTest {
         val fileId2 = NodeStore.createRegularFile(memory.segments, node = givenFileNode2)
 
         var actualRootNode = NodeStore.read(memory.segments, Node::class, rootId)
-        var actualFileNode1 = NodeStore.read(memory.segments, Node::class, fileId1)
-        var actualFileNode2 = NodeStore.read(memory.segments, Node::class, fileId2)
+        var actualFileNode1 = NodeStore.read(memory.segments, Node::class, fileId1.nodeRef)
+        var actualFileNode2 = NodeStore.read(memory.segments, Node::class, fileId2.nodeRef)
         assertThat(actualRootNode).isEqualTo(givenRootNode)
         assertThat(actualFileNode1).isEqualTo(givenFileNode1)
         assertThat(actualFileNode2).isEqualTo(givenFileNode2)
@@ -53,38 +53,37 @@ internal class NodeTest {
         val fileId3 = NodeStore.createRegularFile(memory.segments, node = givenFileNode3)
 
 //        delete file 1
-        memory.delete(fileId1)
+        memory.delete(fileId1.nodeRef)
         actualRootNode = NodeStore.read(memory.segments, Node::class, rootId)
-        actualFileNode1 = NodeStore.read(memory.segments, Node::class, fileId1)
-        actualFileNode2 = NodeStore.read(memory.segments, Node::class, fileId2)
-        var actualFileNode3 = NodeStore.read(memory.segments, Node::class, fileId3)
+        actualFileNode1 = NodeStore.read(memory.segments, Node::class, fileId1.nodeRef)
+        actualFileNode2 = NodeStore.read(memory.segments, Node::class, fileId2.nodeRef)
+        var actualFileNode3 = NodeStore.read(memory.segments, Node::class, fileId3.nodeRef)
         assertThat(actualRootNode).isEqualTo(givenRootNode)
         assertThat(actualFileNode1).isEqualTo(givenFileNode1)
         assertThat(actualFileNode2).isEqualTo(givenFileNode2)
         assertThat(actualFileNode3).isEqualTo(givenFileNode3)
 
 //        delete file 2
-        memory.delete(fileId2)
+        memory.delete(fileId2.nodeRef)
         actualRootNode = NodeStore.read(memory.segments, Node::class, rootId)
-        actualFileNode1 = NodeStore.read(memory.segments, Node::class, fileId1)
-        actualFileNode2 = NodeStore.read(memory.segments, Node::class, fileId2)
-        actualFileNode3 = NodeStore.read(memory.segments, Node::class, fileId3)
+        actualFileNode1 = NodeStore.read(memory.segments, Node::class, fileId1.nodeRef)
+        actualFileNode2 = NodeStore.read(memory.segments, Node::class, fileId2.nodeRef)
+        actualFileNode3 = NodeStore.read(memory.segments, Node::class, fileId3.nodeRef)
         assertThat(actualRootNode).isEqualTo(givenRootNode)
         assertThat(actualFileNode1).isEqualTo(givenFileNode1)
         assertThat(actualFileNode2).isEqualTo(givenFileNode2)
         assertThat(actualFileNode3).isEqualTo(givenFileNode3)
 
 //        delete file 3
-        memory.delete(fileId3)
+        memory.delete(fileId3.nodeRef)
         assertThat(memory.size()).isEqualTo(reservedSizeAfterFirstFile)
     }
 
     companion object {
         fun createRandomFile(segments: MemorySegmentStore, maxStringSize: Int) {
-            var given = newFileNode(segments, newAlphanumericString(maxStringSize))
+            val given = newFileNode(segments, newAlphanumericString(maxStringSize))
             val nodeRef = NodeStore.createRegularFile(segments, node = given)
-            given = given.withNodeRef(nodeRef)
-            val actual = NodeStore.read(segments, Node::class, nodeRef)
+            val actual = NodeStore.read(segments, Node::class, nodeRef.nodeRef)
             assertThat(actual).isEqualTo(given)
         }
 
