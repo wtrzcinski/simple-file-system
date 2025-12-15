@@ -16,30 +16,41 @@
 
 package org.wtrzcinski.files.arguments
 
+import java.nio.file.FileSystem
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.isDirectory
 
 class DeleteOnClosePathProvider(
-    private val file: Path,
     private val delegate: PathProvider,
+    private val file: Path? = null,
+    private val fileSystem: FileSystem? = null,
 ) : PathProvider by delegate {
 
     override fun close() {
-        delegate.close()
-        deleteRecursively(file)
-    }
-
-    private fun deleteRecursively(file: Path) {
-        if (file.isDirectory()) {
-            Files.list(file).forEach { sub ->
-                deleteRecursively(sub)
+        try {
+            delegate.close()
+        } finally {
+            try {
+                file?.deleteRecursively()
+            } finally {
+                fileSystem?.close()
             }
         }
-        Files.delete(file)
     }
 
     override fun toString(): String {
         return "${javaClass.simpleName}(file=$file, delegate=$delegate)"
+    }
+
+    companion object {
+        private fun Path.deleteRecursively() {
+            if (this.isDirectory()) {
+                Files.list(this).forEach { sub ->
+                    sub.deleteRecursively()
+                }
+            }
+            Files.delete(this)
+        }
     }
 }

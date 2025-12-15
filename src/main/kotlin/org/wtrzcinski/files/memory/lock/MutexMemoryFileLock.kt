@@ -17,19 +17,27 @@
 package org.wtrzcinski.files.memory.lock
 
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode
-import org.wtrzcinski.files.memory.common.SegmentOffset
-import java.util.concurrent.locks.ReentrantLock
+import org.wtrzcinski.files.memory.common.SegmentStart
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 internal open class MutexMemoryFileLock(
-    val offset: SegmentOffset = SegmentOffset.of(-1),
-    private val reentrantLock: ReentrantLock = ReentrantLock(true),
+    val offset: SegmentStart = SegmentStart.of(-1),
+    private val reentrantReadWriteLock: ReentrantReadWriteLock = ReentrantReadWriteLock(true)
 ) : MemoryFileLock {
     override fun acquire(mode: MemoryChannelMode): MutexMemoryFileLock {
-        reentrantLock.lock()
+        if (mode.write) {
+            reentrantReadWriteLock.writeLock().lock()
+        } else {
+            reentrantReadWriteLock.readLock().lock()
+        }
         return this
     }
 
     override fun release(mode: MemoryChannelMode) {
-        reentrantLock.unlock()
+        if (mode.write) {
+            reentrantReadWriteLock.writeLock().unlock()
+        } else {
+            reentrantReadWriteLock.readLock().unlock()
+        }
     }
 }

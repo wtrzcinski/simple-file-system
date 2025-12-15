@@ -16,13 +16,13 @@
 
 package org.wtrzcinski.files.memory.node
 
-import org.wtrzcinski.files.memory.common.SegmentOffset
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
+import org.wtrzcinski.files.memory.common.SegmentStart
+import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
 
 internal class Directory(
-    segments: MemorySegmentStore,
-    nodeRef: SegmentOffset = NodeRef(-1),
-    dataRef: SegmentOffset,
+    segments: MemoryBlockStore,
+    nodeRef: SegmentStart = NodeRef(-1),
+    dataRef: SegmentStart,
     modified: Long = 0L,
     created: Long = 0L,
     accessed: Long = 0L,
@@ -39,12 +39,6 @@ internal class Directory(
     permissions = permissions,
     dataRef = dataRef,
 ) {
-    fun randomChild(): Node {
-        val random: Long = findChildIds().toList().random()
-        val randomChild = NodeStore.read(segments, Node::class, NodeRef(random))
-        return randomChild
-    }
-
     override fun withNodeRef(nodeRef: NodeRef): Node {
         return Directory(
             segments = segments,
@@ -56,6 +50,19 @@ internal class Directory(
             permissions = permissions,
             name = name,
         )
+    }
+
+    override fun delete() {
+        if (dataRef.isValid()) {
+            val dataSegment = segments.findSegment(dataRef)
+            dataSegment.use {
+                dataSegment.release()
+            }
+        }
+        val fileSegment = segments.findSegment(nodeRef)
+        fileSegment.use {
+            fileSegment.release()
+        }
     }
 
     fun addChild(childRef: NodeRef) {
@@ -87,7 +94,7 @@ internal class Directory(
     }
 
     fun findChildIds(): Sequence<Long> {
-        val findData = this.findData()
+        val findData = this.readDataRef()
         if (findData != null) {
             return NodeStore.readChildren(segments, nodeRef, findData)
         }

@@ -18,7 +18,7 @@ package org.wtrzcinski.files.memory.bitmap
 
 import org.wtrzcinski.files.memory.common.Segment
 import org.wtrzcinski.files.memory.lock.MemoryFileLock
-import org.wtrzcinski.files.memory.lock.MemoryFileLock.Companion.withLock
+import org.wtrzcinski.files.memory.lock.MemoryFileLock.Companion.use
 import org.wtrzcinski.files.memory.lock.MutexMemoryFileLock
 
 class BitmapGroup(memoryOffset: Long, private val memoryByteSize: Long) : Bitmap {
@@ -30,11 +30,11 @@ class BitmapGroup(memoryOffset: Long, private val memoryByteSize: Long) : Bitmap
     override val reserved: BitmapReservedSegments = BitmapReservedSegments()
 
     init {
-        free.add(BitmapSegment(start = memoryOffset, size = memoryByteSize))
+        free.add(BitmapBlock(start = memoryOffset, size = memoryByteSize))
     }
 
-    override fun reserveBySize(byteSize: Long, prev: Long, name: String?): BitmapSegment {
-        lock.withLock {
+    override fun reserveBySize(byteSize: Long, prev: Long, name: String?): BitmapBlock {
+        lock.use {
             var result = free.findBySize(byteSize)
             free.remove(result)
             if (result.size > byteSize) {
@@ -42,7 +42,7 @@ class BitmapGroup(memoryOffset: Long, private val memoryByteSize: Long) : Bitmap
                 free.add(divide.second)
                 result = divide.first
             }
-            val withPrev = result.copy(prev = prev, name = name)
+            val withPrev = BitmapBlock(start = result.start, size = result.size, prev = prev, name = name)
             reserved.add(withPrev)
 
             require(memoryByteSize == reserved.size + free.size)
@@ -52,12 +52,12 @@ class BitmapGroup(memoryOffset: Long, private val memoryByteSize: Long) : Bitmap
     }
 
     override fun releaseAll(other: Segment) {
-        lock.withLock {
+        lock.use {
             val reserved = reserved.copy()
 
             val addToFree = mutableListOf<Segment>()
-            val addToReserved = mutableListOf<BitmapSegment>()
-            val removeFromReserved = mutableListOf<BitmapSegment>()
+            val addToReserved = mutableListOf<BitmapBlock>()
+            val removeFromReserved = mutableListOf<BitmapBlock>()
             for (segment in reserved) {
                 if (segment.start == other.start) {
                     require(segment.size == other.size)

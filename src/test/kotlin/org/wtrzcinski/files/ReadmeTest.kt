@@ -26,10 +26,11 @@ import java.nio.file.Files
 class ReadmeTest {
     @Test
     fun should() {
-        val givenFileSystem = FileSystems.newFileSystem(URI.create("memory:///"), mapOf("capacity" to "4MB", "blockSize" to "4KB"))
+        val givenEnv = mapOf("capacity" to "1MB", "blockSize" to "1KB")
+        val givenFileSystem = FileSystems.newFileSystem(URI.create("memory:///"), givenEnv)
         val givenDirectoryPath = givenFileSystem.getPath("directory")
         val givenFilePath = givenDirectoryPath.resolve("file.txt")
-        val givenFileContent = newAlphanumericString(512)
+        val givenFileContent = newAlphanumericString(minLength = 1024, maxLength = 1024 * 4)
 
         Files.createDirectory(givenDirectoryPath)
         Files.writeString(givenFilePath, givenFileContent, Charsets.UTF_16)

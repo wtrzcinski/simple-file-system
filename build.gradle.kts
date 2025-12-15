@@ -16,6 +16,8 @@
 
 plugins {
     kotlin("jvm") version "2.2.21"
+    id("org.jetbrains.dokka") version "2.1.0"
+    `maven-publish`
 }
 
 val javaVersion = 24
@@ -38,6 +40,12 @@ tasks.withType<JavaCompile> {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     compilerOptions {
         freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+    }
+}
+
+dokka {
+    dokkaPublications.html {
+        outputDirectory.set(layout.buildDirectory.dir("dokka"))
     }
 }
 

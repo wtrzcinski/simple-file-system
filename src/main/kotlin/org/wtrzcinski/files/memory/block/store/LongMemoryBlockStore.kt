@@ -13,38 +13,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.wtrzcinski.files.memory.segment.store
+package org.wtrzcinski.files.memory.block.store
 
 import org.wtrzcinski.files.memory.bitmap.BitmapGroup
-import org.wtrzcinski.files.memory.segment.MemoryByteBuffer
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore.Companion.intByteSize
+import org.wtrzcinski.files.memory.block.MemoryBlockByteBuffer
+import org.wtrzcinski.files.memory.block.store.MemoryBlockStore.Companion.longByteSize
 import java.lang.foreign.MemorySegment
-import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
 
-internal class IntMemoryMetadata(
+internal class LongMemoryBlockStore(
     memory: MemorySegment,
     bitmap: BitmapGroup,
-    maxMemoryBlockByteSize: Int,
-) : AbstractMemorySegmentStore(
+    maxMemoryBlockByteSize: Long,
+) : AbstractMemoryBlockStore(
     memory = memory,
     bitmap = bitmap,
-    maxMemoryBlockSize = maxMemoryBlockByteSize
+    maxMemoryBlockSize = maxMemoryBlockByteSize,
 ) {
-    override val bodySizeHeader: Long = intByteSize
+    override val bodySizeHeaderSize: Long = longByteSize
 
-    override val nextRefHeaderSize: Long = intByteSize
+    override val nextRefHeaderSize: Long = longByteSize
 
-    override fun writeMeta(byteBuffer: MemoryByteBuffer, value: Long): ByteBuffer {
-        return byteBuffer.putInt(value.toInt())
+    override fun writeMeta(byteBuffer: MemoryBlockByteBuffer, value: Long): ByteBuffer {
+        return byteBuffer.putLong(value)
     }
 
-    override fun readMeta(byteBuffer: MemoryByteBuffer): Long {
-        try {
-            return byteBuffer.getInt().toLong()
-        } catch (e: BufferUnderflowException) {
-            throw e
-        }
+    override fun readMeta(byteBuffer: MemoryBlockByteBuffer): Long {
+        return byteBuffer.getLong()
     }
 }

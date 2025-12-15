@@ -16,13 +16,13 @@
 
 package org.wtrzcinski.files.memory.node
 
-import org.wtrzcinski.files.memory.common.SegmentOffset
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
+import org.wtrzcinski.files.memory.common.SegmentStart
+import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
 
 internal class RegularFile(
-    segments: MemorySegmentStore,
-    nodeRef: SegmentOffset = NodeRef(-1),
-    dataRef: SegmentOffset = SegmentOffset.of(-1),
+    segments: MemoryBlockStore,
+    nodeRef: SegmentStart = NodeRef(-1),
+    dataRef: SegmentStart = SegmentStart.of(-1),
     modified: Long = 0L,
     created: Long = 0L,
     accessed: Long = 0L,
@@ -50,5 +50,18 @@ internal class RegularFile(
             permissions = permissions,
             name = name,
         )
+    }
+
+    override fun delete() {
+        if (dataRef.isValid()) {
+            val dataSegment = segments.findSegment(dataRef)
+            dataSegment.use {
+                dataSegment.release()
+            }
+        }
+        val fileSegment = segments.findSegment(nodeRef)
+        fileSegment.use {
+            fileSegment.release()
+        }
     }
 }

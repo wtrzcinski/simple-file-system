@@ -19,12 +19,12 @@ package org.wtrzcinski.files
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.wtrzcinski.files.common.Fixtures.newAlphanumericString
-import org.wtrzcinski.files.memory.MemoryFileSystemFacade
+import org.wtrzcinski.files.memory.MemorySegmentFileSystem
+import org.wtrzcinski.files.memory.MemoryScopeType
 import org.wtrzcinski.files.memory.node.Node
 import org.wtrzcinski.files.memory.node.NodeRef
 import org.wtrzcinski.files.memory.node.NodeStore
 import org.wtrzcinski.files.memory.node.RegularFile
-import java.lang.foreign.MemorySegment
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.random.Random
@@ -33,7 +33,7 @@ internal class NodeTest {
 
     @Test
     fun `should create files`() {
-        val fileSystem = MemoryFileSystemFacade(MemorySegment.ofArray(ByteArray(1024)), blockSize = 24)
+        val fileSystem = MemorySegmentFileSystem(MemoryScopeType.HEAP, 1024, blockSize = 24)
         val givenRootNode = fileSystem.root()
         val rootId = givenRootNode.nodeRef
         val givenFileNode1 = newFileNode(fileSystem, "file1-file1-file1")
@@ -81,14 +81,15 @@ internal class NodeTest {
     }
 
     companion object {
-        fun createRandomFile(parent: Path, maxStringSize: Int) {
-            val childName = newAlphanumericString(maxStringSize)
+        fun createRandomFile(parent: Path, minStringSize: Int, maxStringSize: Int): Path {
+            val childName = newAlphanumericString(minLength = minStringSize, maxLength = maxStringSize)
             val child = parent.resolve(childName)
             Files.createFile(child)
             assertThat(Files.exists(child)).isTrue()
+            return child
         }
 
-        fun newFileNode(fileSystem: MemoryFileSystemFacade, name: String): RegularFile {
+        fun newFileNode(fileSystem: MemorySegmentFileSystem, name: String): RegularFile {
             return RegularFile(
                 segments = fileSystem.segments,
                 name = name,

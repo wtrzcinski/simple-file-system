@@ -31,7 +31,7 @@ class BitmapFreeSegments {
 
     private val byEndOffset: MutableMap<Long, Segment> = ConcurrentHashMap()
 
-    private val bySize: MutableMap<Long, CopyOnWriteArrayList<BitmapSegment>> = ConcurrentHashMap()
+    private val bySize: MutableMap<Long, CopyOnWriteArrayList<Segment>> = ConcurrentHashMap()
 
     private var freeSize: AtomicLong = AtomicLong(0L)
 
@@ -79,7 +79,7 @@ class BitmapFreeSegments {
         this.byStartOffset[other.start] = other
         this.byEndOffset[other.end] = other
         val bySizeList = this.bySize.computeIfAbsent(other.size) { CopyOnWriteArrayList() }
-        bySizeList.add(other as BitmapSegment)
+        bySizeList.add(other)
         return this
     }
 
@@ -94,7 +94,7 @@ class BitmapFreeSegments {
         this.freeSize -= other.size
     }
 
-    fun findBySize(byteSize: Long): BitmapSegment {
+    fun findBySize(byteSize: Long): Segment {
         val segments1 = bySize[byteSize]
         if (segments1 != null && segments1.isNotEmpty()) {
             return segments1.last()
@@ -108,6 +108,9 @@ class BitmapFreeSegments {
                     return segments.last()
                 }
             }
+        }
+        if (size < segmentToFindSize) {
+            throw BitmapOutOfMemoryException()
         }
         TODO("Not yet implemented")
     }

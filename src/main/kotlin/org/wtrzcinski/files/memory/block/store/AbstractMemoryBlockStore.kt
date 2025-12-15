@@ -14,57 +14,47 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.segment.store
+package org.wtrzcinski.files.memory.block.store
 
 import org.wtrzcinski.files.memory.bitmap.BitmapGroup
+import org.wtrzcinski.files.memory.block.MemoryBlock
+import org.wtrzcinski.files.memory.block.MemoryBlockByteBuffer
 import org.wtrzcinski.files.memory.common.Segment
-import org.wtrzcinski.files.memory.common.SegmentOffset
+import org.wtrzcinski.files.memory.common.SegmentStart
 import org.wtrzcinski.files.memory.lock.MemoryFileLock
 import org.wtrzcinski.files.memory.lock.MutexMemoryFileLock
-import org.wtrzcinski.files.memory.segment.MemoryByteBuffer
-import org.wtrzcinski.files.memory.segment.MemorySegment
 import java.util.concurrent.ConcurrentHashMap
 
-internal abstract class AbstractMemorySegmentStore(
+internal abstract class AbstractMemoryBlockStore(
     val memory: java.lang.foreign.MemorySegment,
     val bitmap: BitmapGroup,
-    val maxMemoryBlockSize: Int,
-) : MemorySegmentStore {
+    val maxMemoryBlockSize: Long,
+) : MemoryBlockStore {
 
     private val locks = ConcurrentHashMap<Long, MutexMemoryFileLock>()
 
-    abstract val bodySizeHeader: Long
+    val minBodyByteSize: Long get() = MemoryBlockStore.longByteSize
 
-    abstract val nextRefHeaderSize: Long
-
-    val minBodyByteSize: Long get() = MemorySegmentStore.longByteSize
-
-    val headerSize: Long get() = bodySizeHeader + nextRefHeaderSize
+    override val headerSize: Long get() = bodySizeHeaderSize + nextRefHeaderSize
 
     val minMemoryBlockSize: Long get() = headerSize + minBodyByteSize
 
-    val bodyByteSize: Long get() = maxMemoryBlockSize - headerSize
-
-    override fun lock(offset: SegmentOffset): MemoryFileLock {
+    override fun lock(offset: SegmentStart): MemoryFileLock {
         return locks.compute(offset.start) { _, value ->
             return@compute value ?: MutexMemoryFileLock(offset)
-        } as MutexMemoryFileLock
+        } as MemoryFileLock
     }
 
-    override fun findSegment(offset: SegmentOffset): MemorySegment {
-        return MemorySegment(segments = this, start = offset.start)
+    override fun findSegment(offset: SegmentStart): MemoryBlock {
+        return MemoryBlock(segments = this, start = offset.start)
     }
 
     override fun releaseAll(other: Segment) {
         bitmap.releaseAll(other = other)
     }
 
-    override fun reserveSegment(bodySize: Long, prevOffset: Long, name: String?): MemorySegment {
-        val bodyByteSize: Long = if (bodySize >= 0) {
-            bodySize
-        } else {
-            this.bodyByteSize
-        }
+    override fun reserveSegment(prevOffset: Long, name: String?): MemoryBlock {
+        val bodyByteSize: Long = maxMemoryBlockSize - headerSize
         val segmentSize = bodyByteSize + headerSize
         val reserveBySize = bitmap.reserveBySize(
             byteSize = segmentSize,
@@ -72,7 +62,7 @@ internal abstract class AbstractMemorySegmentStore(
             name = name,
         )
         require(reserveBySize.start != prevOffset)
-        return MemorySegment(
+        return MemoryBlock(
             segments = this,
             start = reserveBySize.start,
             initialBodySize = bodyByteSize,
@@ -80,9 +70,9 @@ internal abstract class AbstractMemorySegmentStore(
         )
     }
 
-    override fun buffer(offset: Long, size: Long): MemoryByteBuffer {
+    override fun buffer(offset: Long, size: Long): MemoryBlockByteBuffer {
         val asSlice: java.lang.foreign.MemorySegment = memory.asSlice(offset, size)
         val byteBuffer = asSlice.asByteBuffer()
-        return MemoryByteBuffer(segments = this, byteBuffer = byteBuffer)
+        return MemoryBlockByteBuffer(segments = this, byteBuffer = byteBuffer)
     }
 }

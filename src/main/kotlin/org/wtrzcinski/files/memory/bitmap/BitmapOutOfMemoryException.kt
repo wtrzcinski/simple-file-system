@@ -14,23 +14,6 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.lock
+package org.wtrzcinski.files.memory.bitmap
 
-import org.wtrzcinski.files.memory.channels.MemoryChannelMode
-
-class WrapperMemoryFileLock(
-    private val path: List<MemoryFileLock>,
-) : MemoryFileLock {
-    override fun acquire(mode: MemoryChannelMode): MemoryFileLock {
-        for (lock in path) {
-            lock.acquire(mode)
-        }
-        return this
-    }
-
-    override fun release(mode: MemoryChannelMode) {
-        for (it in path) {
-            it.release(mode)
-        }
-    }
-}
+class BitmapOutOfMemoryException : RuntimeException()

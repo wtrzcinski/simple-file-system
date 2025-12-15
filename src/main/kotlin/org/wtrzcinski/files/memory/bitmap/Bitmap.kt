@@ -23,7 +23,7 @@ interface Bitmap {
 
     val free: BitmapFreeSegments
 
-    fun reserveBySize(byteSize: Long, prev: Long, name: String? = null): BitmapSegment
+    fun reserveBySize(byteSize: Long, prev: Long, name: String? = null): BitmapBlock
 
     fun releaseAll(other: Segment)
 

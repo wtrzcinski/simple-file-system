@@ -16,21 +16,26 @@
 
 package org.wtrzcinski.files.memory.node
 
-import org.wtrzcinski.files.memory.common.SegmentOffset
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
+import org.wtrzcinski.files.memory.common.SegmentStart
+import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
 
 internal abstract class Node(
-    val segments: MemorySegmentStore,
-    val nodeRef: SegmentOffset = SegmentOffset.of(-1),
+    val segments: MemoryBlockStore,
+    val nodeRef: SegmentStart = SegmentStart.of(-1),
     val fileType: NodeType = NodeType.Unknown,
-    val dataRef: SegmentOffset = SegmentOffset.of(-1),
+    val name: String = "",
+    val dataRef: SegmentStart = SegmentStart.of(-1),
+    val attrRef: SegmentStart = SegmentStart.of(-1),
     val modified: Long = 0L,
     val created: Long = 0L,
     val accessed: Long = 0L,
     val permissions: String = "-".repeat(9),
-    val name: String = "",
+    val owner: String = "",
+    val group: String = "",
 ) {
-    fun findData(): SegmentOffset? {
+    abstract fun delete()
+
+    fun readDataRef(): SegmentStart? {
         val read = NodeStore.read(segments, Node::class, nodeRef)
         val dataRef = read.dataRef
         return if (dataRef.isValid()) {
@@ -42,19 +47,6 @@ internal abstract class Node(
 
     fun exists(): Boolean {
         return nodeRef.isValid()
-    }
-
-    fun delete() {
-        if (dataRef.isValid()) {
-            val dataSegment = segments.findSegment(dataRef)
-            dataSegment.use {
-                dataSegment.release()
-            }
-        }
-        val fileSegment = segments.findSegment(nodeRef)
-        fileSegment.use {
-            fileSegment.release()
-        }
     }
 
     abstract fun withNodeRef(nodeRef: NodeRef): Node

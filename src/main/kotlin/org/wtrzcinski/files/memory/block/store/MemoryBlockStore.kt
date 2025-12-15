@@ -14,46 +14,52 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.segment.store
+package org.wtrzcinski.files.memory.block.store
 
 import org.wtrzcinski.files.memory.bitmap.BitmapGroup
+import org.wtrzcinski.files.memory.block.MemoryBlock
+import org.wtrzcinski.files.memory.block.MemoryBlockByteBuffer
 import org.wtrzcinski.files.memory.common.Segment
-import org.wtrzcinski.files.memory.common.SegmentOffset
+import org.wtrzcinski.files.memory.common.SegmentStart
 import org.wtrzcinski.files.memory.lock.MemoryFileLock
-import org.wtrzcinski.files.memory.segment.MemoryByteBuffer
-import org.wtrzcinski.files.memory.segment.MemorySegment
 import java.nio.ByteBuffer
 
 @Suppress("MayBeConstant")
-internal interface MemorySegmentStore {
+internal interface MemoryBlockStore {
 
-    fun buffer(offset: Long, size: Long): MemoryByteBuffer
+    val headerSize: Long
 
-    fun readMeta(byteBuffer: MemoryByteBuffer): Long
+    val bodySizeHeaderSize: Long
 
-    fun writeMeta(byteBuffer: MemoryByteBuffer, value: Long): ByteBuffer
+    val nextRefHeaderSize: Long
 
-    fun findSegment(offset: SegmentOffset): MemorySegment
+    fun buffer(offset: Long, size: Long): MemoryBlockByteBuffer
 
-    fun reserveSegment(bodySize: Long = -1, prevOffset: Long = -1, name: String? = null): MemorySegment
+    fun readMeta(byteBuffer: MemoryBlockByteBuffer): Long
+
+    fun writeMeta(byteBuffer: MemoryBlockByteBuffer, value: Long): ByteBuffer
+
+    fun findSegment(offset: SegmentStart): MemoryBlock
+
+    fun reserveSegment(prevOffset: Long = -1, name: String? = null): MemoryBlock
 
     fun releaseAll(other: Segment)
 
-    fun lock(offset: SegmentOffset): MemoryFileLock
+    fun lock(offset: SegmentStart): MemoryFileLock
 
     companion object {
         val intByteSize: Long = 4
         val longByteSize: Long = 8
 
-        fun of(memory: java.lang.foreign.MemorySegment, bitmap: BitmapGroup, maxMemoryBlockByteSize: Int): AbstractMemorySegmentStore {
+        fun of(memory: java.lang.foreign.MemorySegment, bitmap: BitmapGroup, maxMemoryBlockByteSize: Long): AbstractMemoryBlockStore {
             if (memory.byteSize() > Int.MAX_VALUE) {
-                return LongMemoryMetadata(
+                return LongMemoryBlockStore(
                     memory = memory,
                     bitmap = bitmap,
                     maxMemoryBlockByteSize = maxMemoryBlockByteSize
                 )
             } else {
-                return IntMemoryMetadata(
+                return IntMemoryBlockStore(
                     memory = memory,
                     bitmap = bitmap,
                     maxMemoryBlockByteSize = maxMemoryBlockByteSize

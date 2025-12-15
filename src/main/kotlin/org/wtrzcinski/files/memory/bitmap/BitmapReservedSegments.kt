@@ -17,19 +17,17 @@
 package org.wtrzcinski.files.memory.bitmap
 
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
-import kotlin.concurrent.withLock
 
 @OptIn(ExperimentalAtomicApi::class)
 class BitmapReservedSegments {
 
-    private val reserved: CopyOnWriteArrayList<BitmapSegment> = CopyOnWriteArrayList()
+    private val reserved: CopyOnWriteArrayList<BitmapBlock> = CopyOnWriteArrayList()
 
-    private val roots: CopyOnWriteArrayList<BitmapSegment> = CopyOnWriteArrayList()
+    private val roots: CopyOnWriteArrayList<BitmapBlock> = CopyOnWriteArrayList()
 
     private val reservedSize: AtomicLong = AtomicLong(0)
 
@@ -37,7 +35,7 @@ class BitmapReservedSegments {
 
     val size: Long get() = reservedSize.load()
 
-    fun add(other: BitmapSegment) {
+    fun add(other: BitmapBlock) {
         reserved.add(other)
         if (other.isRoot()) {
             roots.add(other)
@@ -45,7 +43,7 @@ class BitmapReservedSegments {
         this.reservedSize += other.size
     }
 
-    fun remove(other: BitmapSegment) {
+    fun remove(other: BitmapBlock) {
         val remove = reserved.remove(other)
         if (!remove) {
             throw BitmapOptimisticLockException()
@@ -56,7 +54,7 @@ class BitmapReservedSegments {
         this.reservedSize -= other.size
     }
 
-    fun copy(): Iterable<BitmapSegment> {
+    fun copy(): Iterable<BitmapBlock> {
         return ArrayList(reserved)
     }
 }

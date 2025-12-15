@@ -18,29 +18,43 @@ package org.wtrzcinski.files.memory.bitmap
 
 import org.wtrzcinski.files.memory.common.Segment
 
-data class BitmapSegment(
-    override val start: Long,
-    override val size: Long,
-    override val end: Long = start + size,
+class BitmapBlock(
+    start: Long,
+    size: Long,
+    end: Long = start + size,
     val prev: Long = -1,
     val name: String? = null,
-) : Segment {
+) : Segment.DefaultSegment(start = start, size = size, end = end) {
 
-    override fun subtract(other: Segment): BitmapSegment {
+    override fun subtract(other: Segment): BitmapBlock {
         val subtract = super.subtract(other)
-        return subtract.copy(prev = this.prev, name = this.name)
+        return BitmapBlock(
+            start = subtract.start,
+            size = subtract.size,
+            prev = this.prev,
+            name = this.name,
+        )
     }
 
-    override fun divide(newSize: Long): Pair<BitmapSegment, BitmapSegment> {
+    override fun divide(newSize: Long): Pair<BitmapBlock, BitmapBlock> {
         val divide = super.divide(newSize)
-        val first = divide.first.copy(prev = this.prev, name = this.name)
-        val second = divide.second.copy(prev = divide.first.start)
+        val first = BitmapBlock(
+            start = divide.first.start,
+            size = divide.first.size,
+            prev = this.prev,
+            name = this.name,
+        )
+        val second = BitmapBlock(
+            start = divide.second.start,
+            size = divide.second.size,
+            prev = divide.first.start,
+        )
         return first to second
     }
 
-    override fun join(next: Segment): BitmapSegment {
+    override fun join(next: Segment): BitmapBlock {
         val join = super.join(next)
-        return join.copy(prev = this.prev, name = this.name)
+        return BitmapBlock(start = join.start, size = join.size, prev = this.prev, name = this.name)
     }
 
     fun isRoot(): Boolean {
@@ -49,23 +63,5 @@ data class BitmapSegment(
 
     override fun toString(): String {
         return "${javaClass.simpleName}(start=$start, end=$end, size=$size, prev=$prev, name=$name)"
-    }
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as BitmapSegment
-
-        if (start != other.start) return false
-        if (size != other.size) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = start.hashCode()
-        result = 31 * result + size.hashCode()
-        return result
     }
 }

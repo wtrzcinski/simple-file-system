@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.spi
 
 import org.wtrzcinski.files.memory.node.Node
@@ -40,7 +41,7 @@ internal class SimpleMemoryFileAttribute(
     }
 
     override fun isOther(): Boolean {
-        return !isRegularFile && isDirectory && isSymbolicLink
+        return !isRegularFile && !isDirectory && !isSymbolicLink
     }
 
     override fun fileKey(): Any {
@@ -59,11 +60,7 @@ internal class SimpleMemoryFileAttribute(
         return FileTime.from(Instant.ofEpochMilli(node.created))
     }
 
-    override fun setTimes(
-        lastModifiedTime: FileTime?,
-        lastAccessTime: FileTime?,
-        createTime: FileTime?
-    ) {
+    override fun setTimes(lastModifiedTime: FileTime?, lastAccessTime: FileTime?, createTime: FileTime?) {
 //        TODO("Not yet implemented")
     }
 
@@ -96,11 +93,11 @@ internal class SimpleMemoryFileAttribute(
         TODO("Not yet implemented")
     }
 
-    override fun readAttributes(): PosixFileAttributes? {
+    override fun setGroup(group: GroupPrincipal?) {
         TODO("Not yet implemented")
     }
 
-    override fun setGroup(group: GroupPrincipal?) {
+    override fun readAttributes(): PosixFileAttributes? {
         TODO("Not yet implemented")
     }
 }

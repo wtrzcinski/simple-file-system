@@ -20,15 +20,15 @@ import org.wtrzcinski.files.memory.channels.MemoryChannelMode
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode.Read
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode.Write
 import org.wtrzcinski.files.memory.channels.MemorySeekableByteChannel
-import org.wtrzcinski.files.memory.common.SegmentOffset
-import org.wtrzcinski.files.memory.segment.MemorySegment
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
+import org.wtrzcinski.files.memory.common.SegmentStart
+import org.wtrzcinski.files.memory.block.MemoryBlock
+import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
 import kotlin.reflect.KClass
 import kotlin.reflect.cast
 import kotlin.use
 
 internal object NodeStore {
-    fun createRegularFile(segments: MemorySegmentStore, directory: Directory? = null, child: RegularFile): RegularFile {
+    fun createRegularFile(segments: MemoryBlockStore, parent: Directory? = null, child: RegularFile): RegularFile {
         if (child.name.isEmpty()) {
             throw NodeValidationException()
         }
@@ -39,13 +39,11 @@ internal object NodeStore {
         }
         val offset = serialized.offset()
         val nodeRef = NodeRef(start = offset.start)
-        if (directory != null) {
-            directory.addChild(nodeRef)
-        }
+        parent?.addChild(nodeRef)
         return child.withNodeRef(nodeRef)
     }
 
-    fun createDirectory(segments: MemorySegmentStore, parent: Directory? = null, child: Node): NodeRef {
+    fun createDirectory(segments: MemoryBlockStore, parent: Directory? = null, child: Node): NodeRef {
         if (child.name.isEmpty()) {
             throw NodeValidationException()
         }
@@ -56,9 +54,7 @@ internal object NodeStore {
         }
         val offset = childByteBuffer.offset()
         val nodeRef = NodeRef(start = offset.start)
-        if (parent != null) {
-            parent.addChild(nodeRef)
-        }
+        parent?.addChild(nodeRef)
         return nodeRef
     }
 
@@ -72,7 +68,7 @@ internal object NodeStore {
         serialized.writeString(node.name)
     }
 
-    fun update(segments: MemorySegmentStore, nodeRef: SegmentOffset, prevDataRef: SegmentOffset, children: List<Long>) {
+    fun update(segments: MemoryBlockStore, nodeRef: SegmentStart, prevDataRef: SegmentStart, children: List<Long>) {
         if (prevDataRef.isValid()) {
             val oldDataSegment = segments.findSegment(prevDataRef)
             oldDataSegment.use {
@@ -80,32 +76,42 @@ internal object NodeStore {
             }
         }
 
-        val newDataSegment: MemorySegment = segments.reserveSegment()
-        val newDataByteChannel = newDataSegment.newByteChannel(mode = Write, null)
-        newDataByteChannel.use {
-            newDataByteChannel.writeRefs(children)
-        }
+        if (children.isNotEmpty()) {
+            val newDataSegment: MemoryBlock = segments.reserveSegment()
+            val newDataByteChannel = newDataSegment.newByteChannel(mode = Write, null)
+            newDataByteChannel.use {
+                newDataByteChannel.writeRefs(children)
+            }
 
+            val nodeSegment = segments.findSegment(nodeRef)
+            val nodeSegmentChannel = nodeSegment.newByteChannel(mode = Write, null)
+            nodeSegmentChannel.use {
+                nodeSegmentChannel.skipInt()
+                nodeSegmentChannel.writeLong(newDataSegment.start)
+                nodeSegmentChannel.skipRemaining()
+            }
+        } else {
+            val nodeSegment = segments.findSegment(nodeRef)
+            val nodeSegmentChannel = nodeSegment.newByteChannel(mode = Write, null)
+            nodeSegmentChannel.use {
+                nodeSegmentChannel.skipInt()
+                nodeSegmentChannel.writeLong(-1L)
+                nodeSegmentChannel.skipRemaining()
+            }
+        }
+    }
+
+    fun update(segments: MemoryBlockStore, nodeRef: SegmentStart, newDataRef: SegmentStart) {
         val nodeSegment = segments.findSegment(nodeRef)
         val nodeSegmentChannel = nodeSegment.newByteChannel(mode = Write, null)
         nodeSegmentChannel.use {
             nodeSegmentChannel.skipInt()
-            nodeSegmentChannel.writeLong(newDataSegment.start)
+            nodeSegmentChannel.writeLong(newDataRef.start)
             nodeSegmentChannel.skipRemaining()
         }
     }
 
-    fun update(segments: MemorySegmentStore, nodeRef: SegmentOffset, newDataRev: SegmentOffset) {
-        val nodeSegment = segments.findSegment(nodeRef)
-        val nodeSegmentChannel = nodeSegment.newByteChannel(mode = Write, null)
-        nodeSegmentChannel.use {
-            nodeSegmentChannel.skipInt()
-            nodeSegmentChannel.writeLong(newDataRev.start)
-            nodeSegmentChannel.skipRemaining()
-        }
-    }
-
-    fun <T : Any> read(segments: MemorySegmentStore, type: KClass<T>, nodeRef: SegmentOffset): T {
+    fun <T : Any> read(segments: MemoryBlockStore, type: KClass<T>, nodeRef: SegmentStart): T {
         val segment = segments.findSegment(offset = nodeRef)
         val node = segment.newByteChannel(mode = Read, null)
         node.use {
@@ -150,7 +156,7 @@ internal object NodeStore {
         }
     }
 
-    fun readChildren(segments: MemorySegmentStore, nodeRef: SegmentOffset, dataRef: SegmentOffset): Sequence<Long> {
+    fun readChildren(segments: MemoryBlockStore, nodeRef: SegmentStart, dataRef: SegmentStart): Sequence<Long> {
         val dataNode = segments.findSegment(dataRef)
         dataNode.use {
             val dataByteChannel = dataNode.newByteChannel(Read, null)

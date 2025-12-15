@@ -17,12 +17,12 @@
 package org.wtrzcinski.files.memory.channels
 
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode.Read
-import org.wtrzcinski.files.memory.common.SegmentOffset
+import org.wtrzcinski.files.memory.common.SegmentStart
 import org.wtrzcinski.files.memory.lock.MemoryFileLock
-import org.wtrzcinski.files.memory.segment.MemorySegment
-import org.wtrzcinski.files.memory.segment.MemorySegmentIterator
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore.Companion.intByteSize
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore.Companion.longByteSize
+import org.wtrzcinski.files.memory.block.MemoryBlock
+import org.wtrzcinski.files.memory.block.MemoryBlockIterator
+import org.wtrzcinski.files.memory.block.store.MemoryBlockStore.Companion.intByteSize
+import org.wtrzcinski.files.memory.block.store.MemoryBlockStore.Companion.longByteSize
 import java.lang.AutoCloseable
 import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
@@ -33,7 +33,7 @@ import kotlin.concurrent.atomics.plusAssign
 
 @OptIn(ExperimentalAtomicApi::class)
 internal data class MemorySeekableByteChannel(
-    val start: MemorySegment,
+    val start: MemoryBlock,
     val lock: MemoryFileLock?,
     val mode: MemoryChannelMode = Read,
 ) : SeekableByteChannel, AutoCloseable {
@@ -42,9 +42,9 @@ internal data class MemorySeekableByteChannel(
 
     private val closed = AtomicBoolean(false)
 
-    private val segments = MemorySegmentIterator(start = start, mode = mode)
+    private val segments = MemoryBlockIterator(start = start, mode = mode)
 
-    fun offset(): SegmentOffset {
+    fun offset(): SegmentStart {
         return segments.offset()
     }
 

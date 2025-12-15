@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.segment
+package org.wtrzcinski.files.memory.block
 
-import org.wtrzcinski.files.memory.segment.store.MemorySegmentStore
+import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
 import java.nio.ByteBuffer
 
-internal class MemoryByteBuffer(
-    val segments: MemorySegmentStore,
+internal class MemoryBlockByteBuffer(
+    val segments: MemoryBlockStore,
     val byteBuffer: ByteBuffer,
 ) {
-
     fun skipRemaining() {
         val limit = byteBuffer.limit()
         val position = byteBuffer.position()
@@ -80,8 +79,8 @@ internal class MemoryByteBuffer(
         return byteBuffer.getLong()
     }
 
-    fun get(dst: ByteArray, dstOffset: Int, length: Int): MemoryByteBuffer {
+    fun get(dst: ByteArray, dstOffset: Int, length: Int): MemoryBlockByteBuffer {
         val result = byteBuffer.get(dst, dstOffset, length)
-        return MemoryByteBuffer(segments, result)
+        return MemoryBlockByteBuffer(segments, result)
     }
 }

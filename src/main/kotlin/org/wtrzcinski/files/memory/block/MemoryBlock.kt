@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.segment
+package org.wtrzcinski.files.memory.block
 
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode
 import org.wtrzcinski.files.memory.channels.MemorySeekableByteChannel
 import org.wtrzcinski.files.memory.common.Segment
-import org.wtrzcinski.files.memory.common.SegmentOffset
+import org.wtrzcinski.files.memory.common.SegmentStart
 import org.wtrzcinski.files.memory.lock.MemoryFileLock
-import org.wtrzcinski.files.memory.segment.store.AbstractMemorySegmentStore
+import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
 
-internal class MemorySegment(
-    private val segments: AbstractMemorySegmentStore,
+internal class MemoryBlock(
+    private val segments: MemoryBlockStore,
     override var start: Long,
     initialBodySize: Long? = null,
     initialNextRef: Long? = null,
@@ -51,20 +51,16 @@ internal class MemorySegment(
             return segments.readMeta(byteBuffer = byteBuffer)
         }
 
-    private var cachedBodyBuffer: MemoryByteBuffer? = null
-    val bodyBuffer: MemoryByteBuffer
-        get() {
-            if (cachedBodyBuffer == null) {
-                cachedBodyBuffer = newBodyBuffer()
-            }
-            return cachedBodyBuffer!!
-        }
-
-    val position: Int get() {
-        return bodyBuffer.position()
+    val bodyBuffer: MemoryBlockByteBuffer by lazy {
+        newBodyBuffer()
     }
 
-    fun newByteChannel(mode: MemoryChannelMode, lock: MemoryFileLock?): MemorySeekableByteChannel {
+    val position: Int
+        get() {
+            return bodyBuffer.position()
+        }
+
+    fun newByteChannel(mode: MemoryChannelMode, lock: MemoryFileLock? = null): MemorySeekableByteChannel {
         return MemorySeekableByteChannel(
             start = this,
             mode = mode,
@@ -80,7 +76,7 @@ internal class MemorySegment(
         bodyBuffer.skipRemaining()
     }
 
-    fun reserveNext(): MemorySegment {
+    fun reserveNext(): MemoryBlock {
         val next = segments.reserveSegment(prevOffset = start)
         require(next.start != this.start)
         val nextOffset = next.start
@@ -89,7 +85,7 @@ internal class MemorySegment(
         return next
     }
 
-    fun readNext(): MemorySegment? {
+    fun readNext(): MemoryBlock? {
         val offset = this.readNextRef()
         if (offset != null && offset.isValid()) {
             return segments.findSegment(offset = offset)
@@ -97,11 +93,11 @@ internal class MemorySegment(
         return null
     }
 
-    fun readNextRef(): SegmentOffset? {
+    fun readNextRef(): SegmentStart? {
         val byteBuffer = newNextRefBuffer()
         val nextRef = byteBuffer.readMeta()
         if (nextRef > 0) {
-            return SegmentOffset.of(nextRef)
+            return SegmentStart.of(nextRef)
         }
         return null
     }
@@ -117,27 +113,27 @@ internal class MemorySegment(
         }
     }
 
-    private fun newBodySizeBuffer(): MemoryByteBuffer {
+    private fun newBodySizeBuffer(): MemoryBlockByteBuffer {
         val result = segments.buffer(
             offset = start,
-            size = segments.bodySizeHeader
+            size = segments.bodySizeHeaderSize
         )
         result.clear()
         return result
     }
 
-    private fun newNextRefBuffer(): MemoryByteBuffer {
+    private fun newNextRefBuffer(): MemoryBlockByteBuffer {
         val result = segments.buffer(
-            offset = start + segments.bodySizeHeader,
+            offset = start + segments.bodySizeHeaderSize,
             size = segments.nextRefHeaderSize,
         )
         result.clear()
         return result
     }
 
-    private fun newBodyBuffer(): MemoryByteBuffer {
+    private fun newBodyBuffer(): MemoryBlockByteBuffer {
         val result = segments.buffer(
-            offset = start + segments.bodySizeHeader + segments.nextRefHeaderSize,
+            offset = start + segments.bodySizeHeaderSize + segments.nextRefHeaderSize,
             size = bodySize,
         )
         result.clear()

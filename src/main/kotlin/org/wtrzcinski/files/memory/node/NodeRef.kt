@@ -15,8 +15,8 @@
  */
 package org.wtrzcinski.files.memory.node
 
-import org.wtrzcinski.files.memory.common.SegmentOffset
+import org.wtrzcinski.files.memory.common.SegmentStart
 
 data class NodeRef(
     override val start: Long
-) : SegmentOffset
+) : SegmentStart

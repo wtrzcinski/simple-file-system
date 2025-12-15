@@ -24,7 +24,7 @@ interface MemoryFileLock {
     fun release(mode: MemoryChannelMode)
 
     companion object {
-        inline fun <T> MemoryFileLock.withLock(block: () -> T): T {
+        inline fun <T> MemoryFileLock.use(block: () -> T): T {
             return use(MemoryChannelMode.Write, block)
         }
 

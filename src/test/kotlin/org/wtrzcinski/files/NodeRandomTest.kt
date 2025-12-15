@@ -18,6 +18,7 @@ package org.wtrzcinski.files
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.wtrzcinski.files.memory.spi.SimpleMemoryFileStore
 import java.net.URI
@@ -30,33 +31,46 @@ internal class NodeRandomTest {
     companion object {
         val megabytes: Int = 2
         val memoryBlockSize: Int = 256
+        val minStringSize: Int = memoryBlockSize
         val maxStringSize: Int = memoryBlockSize * 2
-        val fileSystem = FileSystems.newFileSystem(URI.create("memory:///"), mapOf("capacity" to 1024 * 1024 * megabytes, "blockSize" to memoryBlockSize))
         val repeats: Int = megabytes * 1_000
+
+        init {
+            FileSystems.newFileSystem(URI.create("memory:///"), mapOf("capacity" to 1024 * 1024 * megabytes, "blockSize" to memoryBlockSize))
+        }
+    }
+
+    @BeforeEach
+    fun beforeEach() {
+        val parent = Path.of(URI.create("memory:///"))
+
+        val fileStore = parent.fileSystem.fileStores.first()
+        val used = fileStore.totalSpace - fileStore.unallocatedSpace
+        assertThat(used).isEqualTo(62L)
     }
 
     @AfterEach
     fun afterEach() {
-        val dir = Path.of(URI.create("memory:///"))
-        val list = Files.list(dir)
+        val parent = Path.of(URI.create("memory:///"))
+        val list = Files.list(parent)
         for (child in list) {
             Files.delete(child)
         }
-        val fileStore = dir.fileSystem.fileStores.first()
+        val fileStore = parent.fileSystem.fileStores.first()
         val used = fileStore.totalSpace - fileStore.unallocatedSpace
-        assertThat(used).isEqualTo(74L)
+        assertThat(used).isEqualTo(62L)
     }
 
     @Test
     fun `should create random files`() {
         val parent = Path.of(URI.create("memory:///"))
         repeat(repeats) {
-            NodeTest.createRandomFile(parent = parent, maxStringSize = maxStringSize)
+            NodeTest.createRandomFile(parent = parent, minStringSize = minStringSize, maxStringSize = maxStringSize)
         }
         repeat(repeats) {
             val randomChild = Files.list(parent).toList().random()
             Files.delete(randomChild)
-            NodeTest.createRandomFile(parent = parent, maxStringSize = maxStringSize)
+            NodeTest.createRandomFile(parent = parent, minStringSize = minStringSize, maxStringSize = maxStringSize)
         }
         val fileStore = parent.fileSystem.fileStores.first() as SimpleMemoryFileStore
         println(fileStore.sizeFactor)

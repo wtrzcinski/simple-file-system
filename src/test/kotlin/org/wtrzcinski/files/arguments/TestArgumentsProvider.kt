@@ -21,6 +21,7 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.support.ParameterDeclarations
 import org.wtrzcinski.files.common.Fixtures
+import org.wtrzcinski.files.memory.MemoryScopeType
 import java.net.URI
 import java.nio.file.FileSystems
 import java.nio.file.Files
@@ -28,22 +29,30 @@ import java.util.stream.Stream
 
 class TestArgumentsProvider : ArgumentsProvider {
     override fun provideArguments(parameters: ParameterDeclarations, context: ExtensionContext): Stream<out Arguments> {
-        val stores = listOf(
-//            newDefaultFileSystem(),
-            newMemoryFileSystem(),
-        )
-        return stores.stream().map { Arguments.of(it) }
+        return MemoryScopeType
+            .entries
+            .filter { it != MemoryScopeType.CONFINED }
+            .map { Arguments.argumentSet(it.name, newMemoryFileSystem(it)) }
+            .stream()
     }
 
-    private fun newMemoryFileSystem(): DeleteOnClosePathProvider {
-        val fileSystem = FileSystems.newFileSystem(URI.create("memory:///"), mapOf("capacity" to 1024 * 1024 * 4, "blockSize" to 256))
+    private fun newMemoryFileSystem(scope: MemoryScopeType): DeleteOnClosePathProvider {
+        val env = mapOf("scope" to scope.name, "capacity" to 1024 * 1024 * 4, "blockSize" to 256)
+        val fileSystem = FileSystems.newFileSystem(URI.create("memory:///"), env)
         val rootDirectory = fileSystem.getPath("/")
-        return DeleteOnClosePathProvider(rootDirectory, SubpathPathProvider(rootDirectory))
+        return DeleteOnClosePathProvider(
+            delegate = SubpathPathProvider(rootDirectory),
+            file = rootDirectory,
+            fileSystem = fileSystem,
+        )
     }
 
     private fun newDefaultFileSystem(): DeleteOnClosePathProvider {
         val directory = Fixtures.newTempDirectoryName()
         val tmpDirectoryPath = Files.createTempDirectory(directory)
-        return DeleteOnClosePathProvider(tmpDirectoryPath, SubpathPathProvider(tmpDirectoryPath))
+        return DeleteOnClosePathProvider(
+            delegate = SubpathPathProvider(tmpDirectoryPath),
+            file = tmpDirectoryPath,
+        )
     }
 }

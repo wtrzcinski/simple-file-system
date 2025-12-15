@@ -16,13 +16,13 @@
 
 package org.wtrzcinski.files.memory.spi
 
-import org.wtrzcinski.files.memory.MemoryFileSystemFacade
+import org.wtrzcinski.files.memory.MemorySegmentFileSystem
 import java.nio.file.FileStore
 import java.nio.file.attribute.FileAttributeView
 import java.nio.file.attribute.FileStoreAttributeView
 
 internal class SimpleMemoryFileStore(
-    private val context: MemoryFileSystemFacade,
+    private val context: MemorySegmentFileSystem,
 ) : FileStore() {
     val sizeFactor: Double
         get() {

@@ -38,8 +38,10 @@ object Fixtures {
         return directory
     }
 
-    fun newAlphanumericString(maxLength: Int = 256): String {
-        val length: Int = Random.nextInt(maxLength) + 1
+    fun newAlphanumericString(minLength: Int = 1, maxLength: Int): String {
+        require(minLength < maxLength)
+
+        val length: Int = Random.nextInt(minLength, maxLength)
         val chars: List<Char> = (0..<length)
             .map { Random.nextInt(alphanumeric.size) }
             .map { alphanumeric[it] }

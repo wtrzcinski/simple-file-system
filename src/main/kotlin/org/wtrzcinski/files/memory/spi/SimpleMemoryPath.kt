@@ -103,18 +103,23 @@ internal data class SimpleMemoryPath(
         return URI.create("$scheme:/$joinToString")
     }
 
-    private fun toStringList(): List<String> {
-        val names = mutableListOf<String>()
+    fun toStringList(): List<String> {
+        val names = toNodeList()
+        return names
+            .map { it.name }
+            .filter { it != File.separator }
+    }
+
+    fun toNodeList(): List<Node> {
+        val names = mutableListOf<Node>()
         var current: SimpleMemoryPath? = this
         while (current != null) {
             val node1 = current.node
-            names.add(node1.name)
+            names.add(node1)
             current = current.parent
         }
-        val reversed = names
-            .filter { it != File.separator }
-            .reversed()
-        return reversed
+        val result = names.reversed()
+        return result
     }
 
     override fun toString(): String {

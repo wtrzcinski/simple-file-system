@@ -16,14 +16,15 @@
 
 package org.wtrzcinski.files.memory.spi
 
-import org.wtrzcinski.files.memory.MemoryFileSystemFacade
+import org.wtrzcinski.files.memory.MemoryScopeType
+import org.wtrzcinski.files.memory.MemorySegmentFileSystem
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode.*
 import org.wtrzcinski.files.memory.channels.MemoryFileChannel
 import org.wtrzcinski.files.memory.channels.MemorySeekableByteChannel
 import org.wtrzcinski.files.memory.node.Directory
 import org.wtrzcinski.files.memory.node.Unknown
 import java.net.URI
-import java.nio.ByteBuffer
+import java.nio.ByteBuffer.allocate
 import java.nio.channels.FileChannel
 import java.nio.channels.ReadableByteChannel
 import java.nio.channels.WritableByteChannel
@@ -37,17 +38,16 @@ import kotlin.use
 
 @Suppress("UNCHECKED_CAST")
 internal class SimpleMemoryFileSystemProvider(
-    val fileSystem: MemoryFileSystemFacade? = null,
+    val fileSystem: MemorySegmentFileSystem? = null,
 ) : FileSystemProvider() {
-    //    memory:/c:/bar/foo.txt"
+
     override fun getScheme(): String {
         return "memory"
     }
 
     override fun delete(path: Path) {
         require(fileSystem != null)
-
-        path as SimpleMemoryPath
+        require(path is SimpleMemoryPath)
 
         val node = path.node
         if (node.nodeRef.isValid()) {
@@ -61,9 +61,8 @@ internal class SimpleMemoryFileSystemProvider(
         options: Set<OpenOption?>,
         vararg attrs: FileAttribute<*>
     ): MemorySeekableByteChannel {
-        path as SimpleMemoryPath
-
         require(fileSystem != null)
+        require(path is SimpleMemoryPath)
 
         val mode = if (options.contains(StandardOpenOption.APPEND)) {
             Append
@@ -76,16 +75,17 @@ internal class SimpleMemoryFileSystemProvider(
         }
         val parent = path.parent?.node
         val child = path.node
+        require(parent is Directory)
         return fileSystem.newByteChannel(directory = parent, childName = child.name, mode = mode)
     }
 
     override fun newFileChannel(path: Path, options: Set<OpenOption>, vararg attrs: FileAttribute<*>): FileChannel {
-        return MemoryFileChannel(newByteChannel(path, options, *attrs))
+        return MemoryFileChannel(byteChannel = newByteChannel(path, options, *attrs))
     }
 
     override fun isSameFile(path1: Path, path2: Path): Boolean {
-        path1 as SimpleMemoryPath
-        path2 as SimpleMemoryPath
+        require(path1 is SimpleMemoryPath)
+        require(path2 is SimpleMemoryPath)
 
         val path1Node = path1.node
         val path2Node = path2.node
@@ -97,7 +97,7 @@ internal class SimpleMemoryFileSystemProvider(
         type: Class<A>,
         vararg options: LinkOption?
     ): A {
-        path as SimpleMemoryPath
+        require(path is SimpleMemoryPath)
 
         val pathNode = path.node
         if (!pathNode.exists()) {
@@ -111,7 +111,7 @@ internal class SimpleMemoryFileSystemProvider(
         type: Class<V>,
         vararg options: LinkOption?
     ): V {
-        path as SimpleMemoryPath
+        require(path is SimpleMemoryPath)
 
         val pathNode = path.node
         if (!pathNode.exists()) {
@@ -121,7 +121,7 @@ internal class SimpleMemoryFileSystemProvider(
     }
 
     override fun checkAccess(path: Path, vararg modes: AccessMode) {
-        path as SimpleMemoryPath
+        require(path is SimpleMemoryPath)
 
         val pathNode = path.node
         if (!pathNode.exists()) {
@@ -132,7 +132,7 @@ internal class SimpleMemoryFileSystemProvider(
     override fun newDirectoryStream(dir: Path, filter: DirectoryStream.Filter<in Path>): DirectoryStream<Path> {
         dir as SimpleMemoryPath
 
-        if (dir.isAbsolute()) {
+        if (dir.isAbsolute) {
             return SimpleMemoryDirectoryStream(path = dir, filter = filter)
         }
         TODO("Not yet implemented")
@@ -140,8 +140,7 @@ internal class SimpleMemoryFileSystemProvider(
 
     override fun createDirectory(dir: Path, vararg attrs: FileAttribute<*>) {
         require(fileSystem != null)
-
-        dir as SimpleMemoryPath
+        require(dir is SimpleMemoryPath)
 
         val parent = dir.parent
         if (parent != null) {
@@ -151,17 +150,18 @@ internal class SimpleMemoryFileSystemProvider(
         val parentNode = parent?.node
         require(parentNode is Directory?)
 
-        val node = dir.node
-        if (!node.exists()) {
-            require(node is Unknown)
-            fileSystem.createDirectory(parentNode, node)
+        val child = dir.node
+        if (!child.exists()) {
+            require(parentNode is Directory)
+            require(child is Unknown)
+            fileSystem.createDirectory(parentNode, child)
             require(dir.node is Directory)
         }
     }
 
     override fun move(source: Path, target: Path, vararg options: CopyOption) {
-        source as SimpleMemoryPath
-        target as SimpleMemoryPath
+        require(source is SimpleMemoryPath)
+        require(target is SimpleMemoryPath)
 
         copy(source, target, *options)
 
@@ -169,12 +169,25 @@ internal class SimpleMemoryFileSystemProvider(
     }
 
     override fun copy(source: Path?, target: Path?, vararg options: CopyOption) {
-        source as SimpleMemoryPath
-        target as SimpleMemoryPath
+        require(source is SimpleMemoryPath)
+        require(target is SimpleMemoryPath)
 
         val sourceByteBuffer = Files.newByteChannel(source, StandardOpenOption.READ)
-        val targetByteBuffer = Files.newByteChannel(target, StandardOpenOption.WRITE, StandardOpenOption.CREATE)
-        copy(sourceByteBuffer, targetByteBuffer)
+        sourceByteBuffer.use<ReadableByteChannel, Unit> { input ->
+            val targetByteBuffer = Files.newByteChannel(target, StandardOpenOption.WRITE, StandardOpenOption.CREATE)
+            targetByteBuffer.use<WritableByteChannel, Unit> { output ->
+                val buffer = allocate(1024 * 4)
+                while (true) {
+                    buffer.clear()
+                    val length = input.read(buffer)
+                    if (length < 0) {
+                        return
+                    }
+                    buffer.flip()
+                    output.write(buffer)
+                }
+            }
+        }
     }
 
     override fun getFileSystem(uri: URI): SimpleMemoryFileSystem {
@@ -185,21 +198,19 @@ internal class SimpleMemoryFileSystemProvider(
     override fun newFileSystem(uri: URI, env: Map<String?, *>): FileSystem {
         val capacity: Long = readSize(env["capacity"]) ?: throw IllegalArgumentException("Missing capacity parameter")
         val blockSize: Long = readSize(env["blockSize"])?.toString()?.toLong() ?: (1024 * 4)
+        val scope: MemoryScopeType = env["scope"]?.toString()?.uppercase()?.let { MemoryScopeType.valueOf(it) } ?: MemoryScopeType.DEFAULT
 
-        val context = MemoryFileSystemFacade.ofSize(capacity = capacity, blockSize = blockSize)
+        val context = MemorySegmentFileSystem(scope, capacity = capacity, blockSize = blockSize)
         val fileSystem = SimpleMemoryFileSystem(context)
-        filesystems["memory:///"] = fileSystem
+        filesystems[uri.toString()] = fileSystem
         return fileSystem
     }
 
     private fun readSize(any: Any?): Long? {
-        val toString = any?.toString()?.lowercase()
-        if (toString == null) {
-            return null
-        }
+        val toString = any?.toString()?.lowercase() ?: return null
         try {
             return toString.toLong()
-        } catch (e: NumberFormatException) {
+        } catch (_: NumberFormatException) {
             if (toString.endsWith("kb")) {
                 val take = toString.take(toString.length - 2)
                 return take.toLong() * 1024
@@ -221,12 +232,17 @@ internal class SimpleMemoryFileSystemProvider(
         return fileSystem.getPath(path)
     }
 
-    override fun isHidden(path: Path): Boolean {
-        TODO("Not yet implemented")
+    override fun getFileStore(path: Path?): FileStore {
+        require(fileSystem != null)
+
+        return SimpleMemoryFileStore(fileSystem)
     }
 
-    override fun getFileStore(path: Path?): FileStore {
-        TODO("Not yet implemented")
+    override fun isHidden(path: Path): Boolean {
+        require(path is SimpleMemoryPath)
+
+        val toStringList = path.toStringList()
+        return toStringList.any { it.startsWith(".") }
     }
 
     override fun readAttributes(path: Path?, attributes: String?, vararg options: LinkOption?): Map<String?, Any?> {
@@ -240,21 +256,5 @@ internal class SimpleMemoryFileSystemProvider(
     companion object {
         private val filesystems = ConcurrentHashMap<String, SimpleMemoryFileSystem>()
 
-        private fun copy(source: ReadableByteChannel, target: WritableByteChannel) {
-            source.use { input ->
-                target.use { output ->
-                    val buffer = ByteBuffer.allocate(1024 * 4)
-                    while (true) {
-                        buffer.clear()
-                        val length = input.read(buffer)
-                        if (length < 0) {
-                            return
-                        }
-                        buffer.flip()
-                        output.write(buffer)
-                    }
-                }
-            }
-        }
     }
 }

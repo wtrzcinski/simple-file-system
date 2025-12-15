@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.segment
+package org.wtrzcinski.files.memory.block
 
 import org.wtrzcinski.files.memory.channels.ChannelInvalidStateException
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode
-import org.wtrzcinski.files.memory.common.SegmentOffset
-import org.wtrzcinski.files.memory.lock.MemoryFileLock
+import org.wtrzcinski.files.memory.common.SegmentStart
 import java.lang.AutoCloseable
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -28,14 +27,14 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.plusAssign
 
 @OptIn(ExperimentalAtomicApi::class)
-internal class MemorySegmentIterator(
-    start: MemorySegment,
+internal class MemoryBlockIterator(
+    start: MemoryBlock,
     val mode: MemoryChannelMode,
-) : Iterator<MemorySegment?>, AutoCloseable {
+) : Iterator<MemoryBlock?>, AutoCloseable {
 
     private val closed = AtomicBoolean(false)
 
-    private val segments: CopyOnWriteArrayList<MemorySegment> = CopyOnWriteArrayList()
+    private val segments: CopyOnWriteArrayList<MemoryBlock> = CopyOnWriteArrayList()
 
     private var currentIndex = AtomicInt(0)
 
@@ -47,11 +46,11 @@ internal class MemorySegmentIterator(
         return !closed.load()
     }
 
-    fun offset(): SegmentOffset {
+    fun offset(): SegmentStart {
         return segments.first()
     }
 
-    fun current(): MemorySegment {
+    fun current(): MemoryBlock {
         checkAccessible()
 
         return segments.last()
@@ -62,9 +61,9 @@ internal class MemorySegmentIterator(
         return refs.sumOf { it.bodySize }
     }
 
-    private fun allSegments(): List<MemorySegment> {
-        val refs = mutableListOf<MemorySegment>()
-        var current: MemorySegment? = segments.last()
+    private fun allSegments(): List<MemoryBlock> {
+        val refs = mutableListOf<MemoryBlock>()
+        var current: MemoryBlock? = segments.last()
         while (current != null) {
             refs.add(current)
             current = current.readNext()
@@ -80,7 +79,7 @@ internal class MemorySegmentIterator(
         current.skipRemaining()
     }
 
-    fun skip(): MemorySegment? {
+    fun skip(): MemoryBlock? {
         checkAccessible()
 
         if (currentIndex.load() >= segments.size) {
@@ -88,7 +87,7 @@ internal class MemorySegmentIterator(
         }
 
         val current = segments.last()
-        try {
+        current.use { current ->
             val nextRef = current.readNext()
             if (nextRef != null) {
                 nextRef.skipRemaining()
@@ -99,12 +98,10 @@ internal class MemorySegmentIterator(
                 currentIndex += 1
                 return null
             }
-        } finally {
-            current.close()
         }
     }
 
-    override fun next(): MemorySegment? {
+    override fun next(): MemoryBlock? {
         checkAccessible()
 
         if (currentIndex.load() >= segments.size) {

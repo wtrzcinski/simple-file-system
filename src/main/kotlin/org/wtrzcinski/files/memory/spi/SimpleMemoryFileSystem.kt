@@ -15,18 +15,19 @@
  */
 package org.wtrzcinski.files.memory.spi
 
-import org.wtrzcinski.files.memory.MemoryFileSystemFacade
+import org.wtrzcinski.files.memory.MemorySegmentFileSystem
 import java.io.File
 import java.nio.file.*
 import java.nio.file.attribute.UserPrincipalLookupService
 import java.nio.file.spi.FileSystemProvider
+import kotlin.io.path.fileStore
 
 internal data class SimpleMemoryFileSystem(
-    val context: MemoryFileSystemFacade,
-    val provider: SimpleMemoryFileSystemProvider = SimpleMemoryFileSystemProvider(context),
+    val delegate: MemorySegmentFileSystem,
+    val provider: SimpleMemoryFileSystemProvider = SimpleMemoryFileSystemProvider(delegate),
 ) : FileSystem() {
 
-    val root: SimpleMemoryPath = SimpleMemoryPath(this, null, { context.root() })
+    val root: SimpleMemoryPath = SimpleMemoryPath(this, null, { delegate.root() })
 
     override fun provider(): FileSystemProvider {
         return provider
@@ -53,26 +54,26 @@ internal data class SimpleMemoryFileSystem(
     }
 
     override fun close() {
-        context.close()
+        delegate.close()
     }
 
-    override fun getFileStores(): Iterable<FileStore?>? {
-        return listOf(SimpleMemoryFileStore(context))
+    override fun getFileStores(): Iterable<FileStore?> {
+        return listOf(root.fileStore())
+    }
+
+    override fun isReadOnly(): Boolean {
+        return delegate.memory.isReadOnly()
     }
 
     override fun isOpen(): Boolean {
         TODO("Not yet implemented")
     }
 
-    override fun isReadOnly(): Boolean {
+    override fun getPathMatcher(syntaxAndPattern: String?): PathMatcher? {
         TODO("Not yet implemented")
     }
 
     override fun supportedFileAttributeViews(): Set<String?>? {
-        TODO("Not yet implemented")
-    }
-
-    override fun getPathMatcher(syntaxAndPattern: String?): PathMatcher? {
         TODO("Not yet implemented")
     }
 
