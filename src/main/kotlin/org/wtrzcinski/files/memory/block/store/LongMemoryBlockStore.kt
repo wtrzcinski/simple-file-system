@@ -13,17 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.block.store
 
-import org.wtrzcinski.files.memory.bitmap.BitmapGroup
-import org.wtrzcinski.files.memory.block.MemoryBlockByteBuffer
+import org.wtrzcinski.files.memory.bitmap.BitmapStoreGroup
+import org.wtrzcinski.files.memory.block.byteBuffer.LongMemoryBlockByteBuffer
+import org.wtrzcinski.files.memory.block.byteBuffer.MemoryBlockByteBuffer
 import org.wtrzcinski.files.memory.block.store.MemoryBlockStore.Companion.longByteSize
 import java.lang.foreign.MemorySegment
-import java.nio.ByteBuffer
 
 internal class LongMemoryBlockStore(
     memory: MemorySegment,
-    bitmap: BitmapGroup,
+    bitmap: BitmapStoreGroup,
     maxMemoryBlockByteSize: Long,
 ) : AbstractMemoryBlockStore(
     memory = memory,
@@ -34,11 +35,9 @@ internal class LongMemoryBlockStore(
 
     override val nextRefHeaderSize: Long = longByteSize
 
-    override fun writeMeta(byteBuffer: MemoryBlockByteBuffer, value: Long): ByteBuffer {
-        return byteBuffer.putLong(value)
-    }
-
-    override fun readMeta(byteBuffer: MemoryBlockByteBuffer): Long {
-        return byteBuffer.getLong()
+    override fun buffer(offset: Long, size: Long): MemoryBlockByteBuffer {
+        val asSlice: MemorySegment = memory.asSlice(offset, size)
+        val byteBuffer = asSlice.asByteBuffer()
+        return LongMemoryBlockByteBuffer(memorySegment = asSlice, byteBuffer = byteBuffer)
     }
 }

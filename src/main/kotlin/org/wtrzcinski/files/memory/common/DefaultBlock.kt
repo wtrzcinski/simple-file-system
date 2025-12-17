@@ -14,24 +14,28 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.arguments
+package org.wtrzcinski.files.memory.common
 
-import java.nio.file.Path
+open class DefaultBlock(
+    override val start: Long,
+    override val size: Long,
+    override val end: Long = start + size,
+) : Block {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
 
-class SubpathPathProvider(
-    private val directory: Path
-) : PathProvider {
+        other as Block
 
-    override fun getPath(path: String, vararg more: String): Path {
-        val other = directory.fileSystem.getPath(path, *more)
-        val resolve = directory.resolve(other)
-        return resolve
+        if (start != other.start) return false
+        if (size != other.size) return false
+
+        return true
     }
 
-    override fun close() {
-    }
-
-    override fun toString(): String {
-        return "${javaClass.simpleName}(directory=$directory)"
+    override fun hashCode(): Int {
+        var result = start.hashCode()
+        result = 31 * result + size.hashCode()
+        return result
     }
 }

@@ -18,7 +18,7 @@ package org.wtrzcinski.files.memory.block
 
 import org.wtrzcinski.files.memory.channels.ChannelInvalidStateException
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode
-import org.wtrzcinski.files.memory.common.SegmentStart
+import org.wtrzcinski.files.memory.common.BlockStart
 import java.lang.AutoCloseable
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -46,7 +46,7 @@ internal class MemoryBlockIterator(
         return !closed.load()
     }
 
-    fun offset(): SegmentStart {
+    fun offset(): BlockStart {
         return segments.first()
     }
 
@@ -109,7 +109,7 @@ internal class MemoryBlockIterator(
         }
 
         val current = segments.last()
-        try {
+        current.use { current ->
             val nextRef = current.readNext()
             if (nextRef != null) {
                 if (this.mode.write) {
@@ -136,8 +136,6 @@ internal class MemoryBlockIterator(
                     return null
                 }
             }
-        } finally {
-            current.close()
         }
     }
 

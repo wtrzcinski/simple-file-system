@@ -16,7 +16,7 @@
 
 package org.wtrzcinski.files.memory.bitmap
 
-import org.wtrzcinski.files.memory.common.Segment
+import org.wtrzcinski.files.memory.common.Block
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.concurrent.atomics.AtomicLong
@@ -25,13 +25,13 @@ import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
 
 @OptIn(ExperimentalAtomicApi::class)
-class BitmapFreeSegments {
+class BitmapFreeBlocks {
 
-    private val byStartOffset: MutableMap<Long, Segment> = ConcurrentHashMap()
+    private val byStartOffset: MutableMap<Long, Block> = ConcurrentHashMap()
 
-    private val byEndOffset: MutableMap<Long, Segment> = ConcurrentHashMap()
+    private val byEndOffset: MutableMap<Long, Block> = ConcurrentHashMap()
 
-    private val bySize: MutableMap<Long, CopyOnWriteArrayList<Segment>> = ConcurrentHashMap()
+    private val bySize: MutableMap<Long, CopyOnWriteArrayList<Block>> = ConcurrentHashMap()
 
     private var freeSize: AtomicLong = AtomicLong(0L)
 
@@ -50,7 +50,7 @@ class BitmapFreeSegments {
         return result
     }
 
-    fun add(current: Segment) {
+    fun add(current: Block) {
         val start = findByStartOffset(current.start)
         require(start == null)
 
@@ -74,7 +74,7 @@ class BitmapFreeSegments {
         }
     }
 
-    private fun doAdd(other: Segment): BitmapFreeSegments {
+    private fun doAdd(other: Block): BitmapFreeBlocks {
         this.freeSize += other.size
         this.byStartOffset[other.start] = other
         this.byEndOffset[other.end] = other
@@ -83,7 +83,7 @@ class BitmapFreeSegments {
         return this
     }
 
-    fun remove(other: Segment) {
+    fun remove(other: Block) {
         this.byStartOffset.remove(other.start) ?: throw BitmapOptimisticLockException()
         this.byEndOffset.remove(other.end) ?: throw BitmapOptimisticLockException()
         val bySizeList = this.bySize[other.size] ?: throw BitmapOptimisticLockException()
@@ -94,7 +94,7 @@ class BitmapFreeSegments {
         this.freeSize -= other.size
     }
 
-    fun findBySize(byteSize: Long): Segment {
+    fun findBySize(byteSize: Long): Block {
         val segments1 = bySize[byteSize]
         if (segments1 != null && segments1.isNotEmpty()) {
             return segments1.last()
@@ -115,11 +115,11 @@ class BitmapFreeSegments {
         TODO("Not yet implemented")
     }
 
-    fun findByStartOffset(startOffset: Long): Segment? {
+    fun findByStartOffset(startOffset: Long): Block? {
         return byStartOffset[startOffset]
     }
 
-    fun findByEndOffset(endOffset: Long): Segment? {
+    fun findByEndOffset(endOffset: Long): Block? {
         return byEndOffset[endOffset]
     }
 }

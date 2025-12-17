@@ -14,24 +14,18 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.arguments
+package org.wtrzcinski.files.memory.common
 
-import java.nio.file.Path
+interface BlockStart {
+    val start: Long
 
-class SubpathPathProvider(
-    private val directory: Path
-) : PathProvider {
-
-    override fun getPath(path: String, vararg more: String): Path {
-        val other = directory.fileSystem.getPath(path, *more)
-        val resolve = directory.resolve(other)
-        return resolve
+    fun isValid(): Boolean {
+        return start != -1L
     }
 
-    override fun close() {
-    }
-
-    override fun toString(): String {
-        return "${javaClass.simpleName}(directory=$directory)"
+    companion object {
+        fun of(offset: Long): BlockStart {
+            return DefaultBlockStart(offset)
+        }
     }
 }

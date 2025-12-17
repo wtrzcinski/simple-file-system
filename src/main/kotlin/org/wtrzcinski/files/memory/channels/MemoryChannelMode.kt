@@ -16,9 +16,32 @@
 
 package org.wtrzcinski.files.memory.channels
 
-enum class MemoryChannelMode(val write: Boolean) {
-    Read(false),
-    Append(true),
-    Create(true),
-    Write(true),
+import java.nio.file.StandardOpenOption
+
+class MemoryChannelMode(val options: Set<StandardOpenOption>) {
+
+    constructor(vararg options: StandardOpenOption) : this(options.toSet())
+
+    val write: Boolean
+        get() {
+            return options.contains(StandardOpenOption.WRITE)
+                    || options.contains(StandardOpenOption.APPEND)
+                    || options.contains(StandardOpenOption.TRUNCATE_EXISTING)
+        }
+
+    val append: Boolean
+        get() {
+            return options.contains(StandardOpenOption.APPEND)
+        }
+
+    val read: Boolean
+        get() {
+            return options.isEmpty()
+                    || options.contains(StandardOpenOption.READ)
+        }
+
+    companion object {
+        val WRITE = MemoryChannelMode(StandardOpenOption.WRITE)
+        val READ = MemoryChannelMode(StandardOpenOption.READ)
+    }
 }

@@ -1,20 +1,20 @@
-Simple in-memory file system
-----------------------------
+Java Simple Memory Segment File System
+--------------------------------------
 
 [![license](https://img.shields.io/badge/license-Apache%20License%202.0-blue.svg?style=flat)](https://www.apache.org/licenses/LICENSE-2.0)
 
-Simple in-memory file system for Java 22 and above, that
-- implements the [java.nio.file](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/file/package-summary.html) file system APIs
-- utilizes the [java.lang.foreign](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/foreign/package-summary.html) memory access APIs
+Java Simple [File System](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/file/package-summary.html) 
+based on [Memory Segment](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/foreign/package-summary.html)
 
 Usage
 -----
 
 ```kotlin
-val givenFileSystem = FileSystems.newFileSystem(URI.create("memory:///"), mapOf("capacity" to "4MB", "blockSize" to "4KB"))
+val givenEnv = mapOf("capacity" to "1MB", "blockSize" to "1KB")
+val givenFileSystem = FileSystems.newFileSystem(URI.create("jsmsfs:///"), givenEnv)
 val givenDirectoryPath = givenFileSystem.getPath("directory")
 val givenFilePath = givenDirectoryPath.resolve("file.txt")
-val givenFileContent = newAlphanumericString(512)
+val givenFileContent = newAlphanumericString(minLength = 1024, maxLength = 1024 * 4)
 
 Files.createDirectory(givenDirectoryPath)
 Files.writeString(givenFilePath, givenFileContent, Charsets.UTF_16)

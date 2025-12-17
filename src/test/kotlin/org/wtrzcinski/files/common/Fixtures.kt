@@ -16,6 +16,8 @@
 
 package org.wtrzcinski.files.common
 
+import org.wtrzcinski.files.arguments.PathProvider
+import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
@@ -46,5 +48,9 @@ object Fixtures {
             .map { Random.nextInt(alphanumeric.size) }
             .map { alphanumeric[it] }
         return chars.joinToString("")
+    }
+
+    fun PathProvider.newRandomPath(): Path {
+        return getPath(newUniqueString())
     }
 }

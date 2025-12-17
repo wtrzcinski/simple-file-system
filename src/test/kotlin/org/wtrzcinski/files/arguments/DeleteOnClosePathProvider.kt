@@ -40,7 +40,7 @@ class DeleteOnClosePathProvider(
     }
 
     override fun toString(): String {
-        return "${javaClass.simpleName}(file=$file, delegate=$delegate)"
+        return "${javaClass.simpleName}(file=$file, fileSystem=$fileSystem, delegate=$delegate)"
     }
 
     companion object {

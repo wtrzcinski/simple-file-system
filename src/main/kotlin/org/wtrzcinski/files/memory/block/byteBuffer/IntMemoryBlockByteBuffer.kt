@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.arguments
+package org.wtrzcinski.files.memory.block.byteBuffer
 
-import java.nio.file.Path
+import java.lang.foreign.MemorySegment
+import java.nio.ByteBuffer
 
-class SubpathPathProvider(
-    private val directory: Path
-) : PathProvider {
-
-    override fun getPath(path: String, vararg more: String): Path {
-        val other = directory.fileSystem.getPath(path, *more)
-        val resolve = directory.resolve(other)
-        return resolve
+internal class IntMemoryBlockByteBuffer(
+    memorySegment: MemorySegment,
+    byteBuffer: ByteBuffer,
+) : MemoryBlockByteBuffer(
+    memorySegment = memorySegment,
+    byteBuffer = byteBuffer
+) {
+    override fun readMeta(): Long {
+        return byteBuffer.getInt().toLong()
     }
 
-    override fun close() {
-    }
-
-    override fun toString(): String {
-        return "${javaClass.simpleName}(directory=$directory)"
+    override fun writeMeta(value: Long) {
+        byteBuffer.putInt(value.toInt())
     }
 }

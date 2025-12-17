@@ -16,13 +16,12 @@
 
 package org.wtrzcinski.files.memory.channels
 
-import org.wtrzcinski.files.memory.channels.MemoryChannelMode.Read
-import org.wtrzcinski.files.memory.common.SegmentStart
-import org.wtrzcinski.files.memory.lock.MemoryFileLock
 import org.wtrzcinski.files.memory.block.MemoryBlock
 import org.wtrzcinski.files.memory.block.MemoryBlockIterator
 import org.wtrzcinski.files.memory.block.store.MemoryBlockStore.Companion.intByteSize
 import org.wtrzcinski.files.memory.block.store.MemoryBlockStore.Companion.longByteSize
+import org.wtrzcinski.files.memory.common.BlockStart
+import org.wtrzcinski.files.memory.lock.MemoryFileLock
 import java.lang.AutoCloseable
 import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
@@ -35,7 +34,7 @@ import kotlin.concurrent.atomics.plusAssign
 internal data class MemorySeekableByteChannel(
     val start: MemoryBlock,
     val lock: MemoryFileLock?,
-    val mode: MemoryChannelMode = Read,
+    val mode: MemoryChannelMode,
 ) : SeekableByteChannel, AutoCloseable {
 
     private var position = AtomicLong(0)
@@ -44,7 +43,7 @@ internal data class MemorySeekableByteChannel(
 
     private val segments = MemoryBlockIterator(start = start, mode = mode)
 
-    fun offset(): SegmentStart {
+    fun offset(): BlockStart {
         return segments.offset()
     }
 
@@ -70,7 +69,7 @@ internal data class MemorySeekableByteChannel(
     }
 
     override fun size(): Long {
-        if (mode == Read) {
+        if (mode.read) {
             return segments.size()
         }
         TODO("Not yet implemented")

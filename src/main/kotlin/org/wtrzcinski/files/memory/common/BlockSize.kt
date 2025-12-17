@@ -14,24 +14,8 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.arguments
+package org.wtrzcinski.files.memory.common
 
-import java.nio.file.Path
-
-class SubpathPathProvider(
-    private val directory: Path
-) : PathProvider {
-
-    override fun getPath(path: String, vararg more: String): Path {
-        val other = directory.fileSystem.getPath(path, *more)
-        val resolve = directory.resolve(other)
-        return resolve
-    }
-
-    override fun close() {
-    }
-
-    override fun toString(): String {
-        return "${javaClass.simpleName}(directory=$directory)"
-    }
+interface BlockSize {
+    val size: Long
 }

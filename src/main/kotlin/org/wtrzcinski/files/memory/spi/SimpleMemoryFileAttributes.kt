@@ -19,13 +19,15 @@ package org.wtrzcinski.files.memory.spi
 import org.wtrzcinski.files.memory.node.Node
 import org.wtrzcinski.files.memory.node.NodeType
 import java.nio.file.attribute.*
-import java.time.Instant
 
-internal class SimpleMemoryFileAttribute(
+// todo investigate UnixFileAttributes and JrtFileAttributeView
+// todo add support for UserDefinedFileAttributeView, BasicFileAttributeView, PosixFileAttributeView
+internal class SimpleMemoryFileAttributes(
     val node: Node,
-) : BasicFileAttributes, FileAttributeView, PosixFileAttributes, PosixFileAttributeView {
+) : PosixFileAttributes, PosixFileAttributeView {
+
     override fun name(): String {
-        return node.name
+        TODO("Not yet implemented")
     }
 
     override fun isRegularFile(): Boolean {
@@ -48,32 +50,31 @@ internal class SimpleMemoryFileAttribute(
         return node.nodeRef
     }
 
+    override fun size(): Long {
+        TODO("Not yet implemented")
+    }
+
     override fun lastModifiedTime(): FileTime {
-        return FileTime.from(Instant.ofEpochMilli(node.modified))
+        TODO("Not yet implemented")
     }
 
     override fun lastAccessTime(): FileTime? {
-        return FileTime.from(Instant.ofEpochMilli(node.accessed))
+        TODO("Not yet implemented")
     }
 
     override fun creationTime(): FileTime? {
-        return FileTime.from(Instant.ofEpochMilli(node.created))
+        TODO("Not yet implemented")
     }
 
     override fun setTimes(lastModifiedTime: FileTime?, lastAccessTime: FileTime?, createTime: FileTime?) {
-//        TODO("Not yet implemented")
+        TODO("Not yet implemented")
     }
 
     override fun permissions(): Set<PosixFilePermission?>? {
-//        TODO("Not yet implemented")
-        return setOf()
+        TODO("Not yet implemented")
     }
 
     override fun setPermissions(perms: Set<PosixFilePermission>) {
-//        TODO("Not yet implemented")
-    }
-
-    override fun size(): Long {
         TODO("Not yet implemented")
     }
 
@@ -81,15 +82,15 @@ internal class SimpleMemoryFileAttribute(
         TODO("Not yet implemented")
     }
 
-    override fun group(): GroupPrincipal? {
-        TODO("Not yet implemented")
-    }
-
     override fun getOwner(): UserPrincipal? {
-        TODO("Not yet implemented")
+        return owner()
     }
 
     override fun setOwner(owner: UserPrincipal?) {
+        TODO("Not yet implemented")
+    }
+
+    override fun group(): GroupPrincipal? {
         TODO("Not yet implemented")
     }
 

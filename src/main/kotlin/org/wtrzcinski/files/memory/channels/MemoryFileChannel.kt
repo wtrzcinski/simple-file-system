@@ -16,6 +16,8 @@
 
 package org.wtrzcinski.files.memory.channels
 
+import java.lang.foreign.Arena
+import java.lang.foreign.MemorySegment
 import java.nio.ByteBuffer
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
@@ -24,37 +26,51 @@ import java.nio.channels.ReadableByteChannel
 import java.nio.channels.WritableByteChannel
 
 internal class MemoryFileChannel(
-    private val byteChannel: MemorySeekableByteChannel
+    private val memorySeekableByteChannel: MemorySeekableByteChannel
 ) : FileChannel() {
 
     //    seekable byte channel
     override fun read(dst: ByteBuffer): Int {
-        return byteChannel.read(dst)
+        return memorySeekableByteChannel.read(dst)
     }
 
     override fun write(src: ByteBuffer): Int {
-        return byteChannel.write(src)
+        return memorySeekableByteChannel.write(src)
     }
 
     override fun position(): Long {
-        return byteChannel.position()
+        return memorySeekableByteChannel.position()
     }
 
     override fun position(newPosition: Long): FileChannel {
-        return MemoryFileChannel(byteChannel.position(newPosition))
+        return MemoryFileChannel(memorySeekableByteChannel.position(newPosition))
     }
 
     override fun size(): Long {
-        return byteChannel.size()
+        return memorySeekableByteChannel.size()
     }
 
     override fun truncate(size: Long): FileChannel {
-        return MemoryFileChannel(byteChannel.truncate(size))
+        return MemoryFileChannel(memorySeekableByteChannel.truncate(size))
     }
 
-//    file channel
+    //    file channel
     override fun implCloseChannel() {
-        byteChannel.close()
+        memorySeekableByteChannel.close()
+    }
+
+    override fun map(mode: MapMode, position: Long, size: Long): MappedByteBuffer {
+        val directBuffer = ByteBuffer.allocateDirect(size.toInt())
+        require(directBuffer is MappedByteBuffer)
+        return directBuffer
+    }
+
+    override fun map(mode: MapMode, offset: Long, size: Long, arena: Arena): MemorySegment {
+        TODO("Not yet implemented")
+    }
+
+    override fun force(metaData: Boolean) {
+        TODO("Not yet implemented")
     }
 
     override fun lock(position: Long, size: Long, shared: Boolean): FileLock {
@@ -62,18 +78,6 @@ internal class MemoryFileChannel(
     }
 
     override fun tryLock(position: Long, size: Long, shared: Boolean): FileLock {
-        TODO("Not yet implemented")
-    }
-
-    override fun read(dsts: Array<out ByteBuffer?>?, offset: Int, length: Int): Long {
-        TODO("Not yet implemented")
-    }
-
-    override fun write(srcs: Array<out ByteBuffer?>?, offset: Int, length: Int): Long {
-        TODO("Not yet implemented")
-    }
-
-    override fun force(metaData: Boolean) {
         TODO("Not yet implemented")
     }
 
@@ -85,15 +89,19 @@ internal class MemoryFileChannel(
         TODO("Not yet implemented")
     }
 
-    override fun read(dst: ByteBuffer?, position: Long): Int {
+    override fun read(dsts: Array<out ByteBuffer>, offset: Int, length: Int): Long {
         TODO("Not yet implemented")
     }
 
-    override fun write(src: ByteBuffer?, position: Long): Int {
+    override fun read(dst: ByteBuffer, position: Long): Int {
         TODO("Not yet implemented")
     }
 
-    override fun map(mode: MapMode?, position: Long, size: Long): MappedByteBuffer? {
+    override fun write(src: ByteBuffer, position: Long): Int {
+        TODO("Not yet implemented")
+    }
+
+    override fun write(srcs: Array<out ByteBuffer>, offset: Int, length: Int): Long {
         TODO("Not yet implemented")
     }
 }

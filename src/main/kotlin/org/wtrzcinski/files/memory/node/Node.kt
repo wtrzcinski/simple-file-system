@@ -16,27 +16,33 @@
 
 package org.wtrzcinski.files.memory.node
 
-import org.wtrzcinski.files.memory.common.SegmentStart
-import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
+import org.wtrzcinski.files.memory.MemorySegmentFileSystem
+import org.wtrzcinski.files.memory.common.BlockStart
 
 internal abstract class Node(
-    val segments: MemoryBlockStore,
-    val nodeRef: SegmentStart = SegmentStart.of(-1),
+    val fileSystem: MemorySegmentFileSystem,
+    val nodeRef: BlockStart = BlockStart.of(-1),
     val fileType: NodeType = NodeType.Unknown,
+    val dataRef: BlockStart = BlockStart.of(-1),
+    val attrRef: BlockStart = BlockStart.of(-1),
     val name: String = "",
-    val dataRef: SegmentStart = SegmentStart.of(-1),
-    val attrRef: SegmentStart = SegmentStart.of(-1),
-    val modified: Long = 0L,
-    val created: Long = 0L,
-    val accessed: Long = 0L,
-    val permissions: String = "-".repeat(9),
-    val owner: String = "",
-    val group: String = "",
 ) {
-    abstract fun delete()
+    fun delete() {
+        val dataRef = readDataRef()
+        if (dataRef != null) {
+            fileSystem.blockStore.releaseAll(dataRef)
+        }
 
-    fun readDataRef(): SegmentStart? {
-        val read = NodeStore.read(segments, Node::class, nodeRef)
+        val attrRef = readAttrRef()
+        if (attrRef != null) {
+            fileSystem.blockStore.releaseAll(attrRef)
+        }
+
+        fileSystem.blockStore.releaseAll(nodeRef)
+    }
+
+    fun readDataRef(): BlockStart? {
+        val read = fileSystem.read(Node::class, nodeRef)
         val dataRef = read.dataRef
         return if (dataRef.isValid()) {
             dataRef
@@ -45,7 +51,17 @@ internal abstract class Node(
         }
     }
 
-    fun exists(): Boolean {
+    fun readAttrRef(): BlockStart? {
+        val read = fileSystem.read(Node::class, nodeRef)
+        val attrRef = read.attrRef
+        return if (attrRef.isValid()) {
+            attrRef
+        } else {
+            null
+        }
+    }
+
+    fun isValid(): Boolean {
         return nodeRef.isValid()
     }
 
@@ -65,6 +81,7 @@ internal abstract class Node(
 //        if (nodeRef != other.nodeRef) return false
         if (name != other.name) return false
         if (dataRef != other.dataRef) return false
+        if (attrRef != other.attrRef) return false
 
         return true
     }
@@ -74,6 +91,7 @@ internal abstract class Node(
 //        result = 31 * result + nodeRef.hashCode()
         result = 31 * result + name.hashCode()
         result = 31 * result + dataRef.hashCode()
+        result = 31 * result + attrRef.hashCode()
         return result
     }
 }

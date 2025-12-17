@@ -14,22 +14,25 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.bitmap
+package org.wtrzcinski.files.memory.common
 
-import org.wtrzcinski.files.memory.common.Segment
+class DefaultBlockStart(private val offset: Long) : BlockStart {
+    override val start: Long get() = offset
 
-interface Bitmap {
-    val reserved: BitmapReservedSegments
+    override fun toString(): String {
+        return "${javaClass.simpleName}(start=$start)"
+    }
 
-    val free: BitmapFreeSegments
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
 
-    fun reserveBySize(byteSize: Long, prev: Long, name: String? = null): BitmapBlock
+        other as BlockStart
 
-    fun releaseAll(other: Segment)
+        return start == other.start
+    }
 
-    companion object {
-        fun of(memoryOffset: Long, memorySize: Long): BitmapGroup {
-            return BitmapGroup(memoryOffset = memoryOffset, memoryByteSize = memorySize)
-        }
+    override fun hashCode(): Int {
+        return start.hashCode()
     }
 }

@@ -16,43 +16,30 @@
 
 package org.wtrzcinski.files.memory.node
 
-import org.wtrzcinski.files.memory.common.SegmentStart
-import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
+import org.wtrzcinski.files.memory.MemorySegmentFileSystem
+import org.wtrzcinski.files.memory.common.BlockStart
 
 internal class Unknown(
-    segments: MemoryBlockStore,
-    nodeRef: SegmentStart = NodeRef(-1),
-    dataRef: SegmentStart = SegmentStart.of(-1),
-    modified: Long = 0L,
-    created: Long = 0L,
-    accessed: Long = 0L,
-    permissions: String = "-".repeat(9),
+    segments: MemorySegmentFileSystem,
+    nodeRef: BlockStart = NodeRef(-1),
+    dataRef: BlockStart = BlockStart.of(-1),
+    attrRef: BlockStart = BlockStart.of(-1),
     name: String,
 ) : Node(
-    segments = segments,
+    fileSystem = segments,
+    fileType = NodeType.Unknown,
     nodeRef = nodeRef,
     dataRef = dataRef,
-    fileType = NodeType.Unknown,
-    permissions = permissions,
-    modified = modified,
-    created = created,
-    accessed = accessed,
+    attrRef = attrRef,
     name = name,
 ) {
     override fun withNodeRef(nodeRef: NodeRef): Node {
         return Unknown(
-            segments = segments,
+            segments = fileSystem,
             nodeRef = nodeRef,
             dataRef = dataRef,
-            modified = modified,
-            created = created,
-            accessed = accessed,
-            permissions = permissions,
+            attrRef = attrRef,
             name = name,
         )
-    }
-
-    override fun delete() {
-        TODO("Not yet implemented")
     }
 }

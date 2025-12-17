@@ -14,24 +14,22 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.arguments
+package org.wtrzcinski.files.memory.bitmap
 
-import java.nio.file.Path
+import org.wtrzcinski.files.memory.common.Block
 
-class SubpathPathProvider(
-    private val directory: Path
-) : PathProvider {
+interface BitmapStore {
+    val reserved: BitmapReservedBlocks
 
-    override fun getPath(path: String, vararg more: String): Path {
-        val other = directory.fileSystem.getPath(path, *more)
-        val resolve = directory.resolve(other)
-        return resolve
-    }
+    val free: BitmapFreeBlocks
 
-    override fun close() {
-    }
+    fun reserveBySize(byteSize: Long, prev: Long, name: String? = null): BitmapBlock
 
-    override fun toString(): String {
-        return "${javaClass.simpleName}(directory=$directory)"
+    fun releaseAll(other: Block)
+
+    companion object {
+        operator fun invoke(memoryOffset: Long, memorySize: Long): BitmapStoreGroup {
+            return BitmapStoreGroup(memoryOffset = memoryOffset, memoryByteSize = memorySize)
+        }
     }
 }

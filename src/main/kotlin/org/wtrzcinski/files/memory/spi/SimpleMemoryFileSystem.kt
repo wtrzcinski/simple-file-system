@@ -13,23 +13,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.spi
 
 import org.wtrzcinski.files.memory.MemorySegmentFileSystem
 import java.io.File
 import java.nio.file.*
 import java.nio.file.attribute.UserPrincipalLookupService
-import java.nio.file.spi.FileSystemProvider
 import kotlin.io.path.fileStore
 
 internal data class SimpleMemoryFileSystem(
-    val delegate: MemorySegmentFileSystem,
-    val provider: SimpleMemoryFileSystemProvider = SimpleMemoryFileSystemProvider(delegate),
+    val name: String,
+    val env: Map<String, *>,
+    val provider: SimpleMemoryFileSystemProvider,
 ) : FileSystem() {
 
-    val root: SimpleMemoryPath = SimpleMemoryPath(this, null, { delegate.root() })
+    val delegate: MemorySegmentFileSystem get() {
+        val fileSystem = provider.fileSystem
+        requireNotNull(fileSystem)
+        return fileSystem
+    }
 
-    override fun provider(): FileSystemProvider {
+    val root: SimpleMemoryPath = SimpleMemoryPath(
+        fs = this,
+        parent = null,
+        nodeSupplier = { delegate.root() },
+    )
+
+    override fun toString(): String {
+        return "${javaClass.simpleName}(name=$name, env=$env, root=$root)"
+    }
+
+    override fun provider(): SimpleMemoryFileSystemProvider {
         return provider
     }
 
@@ -54,10 +69,10 @@ internal data class SimpleMemoryFileSystem(
     }
 
     override fun close() {
-        delegate.close()
+        provider.close()
     }
 
-    override fun getFileStores(): Iterable<FileStore?> {
+    override fun getFileStores(): Iterable<FileStore> {
         return listOf(root.fileStore())
     }
 
@@ -66,17 +81,20 @@ internal data class SimpleMemoryFileSystem(
     }
 
     override fun isOpen(): Boolean {
-        TODO("Not yet implemented")
+        return delegate.memory.scope().isAlive()
     }
 
+//    todo test Files#newDirectoryStream(Path dir, String glob)
     override fun getPathMatcher(syntaxAndPattern: String?): PathMatcher? {
         TODO("Not yet implemented")
     }
 
+//    todo see LinuxFileSystem
     override fun supportedFileAttributeViews(): Set<String?>? {
-        TODO("Not yet implemented")
+        return setOf("basic", "posix")
     }
 
+//    todo test Files#setOwner(Path path, UserPrincipal owner)
     override fun getUserPrincipalLookupService(): UserPrincipalLookupService? {
         TODO("Not yet implemented")
     }

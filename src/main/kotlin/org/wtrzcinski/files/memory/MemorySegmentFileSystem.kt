@@ -16,117 +16,108 @@
 
 package org.wtrzcinski.files.memory
 
-import org.wtrzcinski.files.memory.bitmap.Bitmap
-import org.wtrzcinski.files.memory.bitmap.BitmapGroup
+import org.wtrzcinski.files.memory.bitmap.BitmapStore
+import org.wtrzcinski.files.memory.bitmap.BitmapStoreGroup
 import org.wtrzcinski.files.memory.block.MemoryBlock
 import org.wtrzcinski.files.memory.block.store.AbstractMemoryBlockStore
 import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode
-import org.wtrzcinski.files.memory.channels.MemoryChannelMode.Write
 import org.wtrzcinski.files.memory.channels.MemorySeekableByteChannel
-import org.wtrzcinski.files.memory.common.SegmentStart
+import org.wtrzcinski.files.memory.common.BlockStart
 import org.wtrzcinski.files.memory.lock.MemoryFileLock
 import org.wtrzcinski.files.memory.lock.MemoryFileLock.Companion.use
 import org.wtrzcinski.files.memory.node.*
 import java.io.File
 import java.lang.foreign.MemorySegment
+import kotlin.reflect.KClass
+import kotlin.reflect.cast
+import kotlin.use
 
 internal class MemorySegmentFileSystem(
     scope: MemoryScopeType,
-    capacity: Long,
+    val byteSize: Long,
     blockSize: Long,
-    readOnly: Boolean = false,
+    val name: String = "",
+    env: Map<String, Any?> = mapOf(),
 ) : AutoCloseable {
 
-    val memoryFactory: MemorySegmentFactory = scope.createFactory(capacity)
+    val memoryFactory: MemorySegmentFactory = scope.createFactory(env)
 
-    val memory: MemorySegment = run {
-        val create = memoryFactory.create()
-        return@run if (readOnly) {
-            create.asReadOnly()
-        } else {
-            create
-        }
-    }
+    val memory: MemorySegment = memoryFactory.allocate(byteSize)
 
-    val bitmap: BitmapGroup = Bitmap.of(memoryOffset = 0L, memorySize = memoryFactory.byteSize())
+    val bitmapStore: BitmapStoreGroup = BitmapStore(memoryOffset = 0L, memorySize = byteSize)
 
-    val segments: AbstractMemoryBlockStore = MemoryBlockStore.of(memory = memory, bitmap = bitmap, maxMemoryBlockByteSize = blockSize)
+    val blockStore: AbstractMemoryBlockStore = MemoryBlockStore(memory = memory, bitmap = bitmapStore, maxMemoryBlockByteSize = blockSize)
 
     val rootRef: NodeRef = run {
-        val now = System.currentTimeMillis()
-        val rootNode = Unknown(segments = segments, name = File.separator, created = now)
-        NodeStore.createDirectory(segments, null, rootNode)
+        val rootNode = Unknown(segments = this, name = File.separator)
+        createDirectory(null, rootNode)
     }
 
     fun root(): Directory {
-        return NodeStore.read(segments = segments, type = Directory::class, nodeRef = rootRef)
+        return read(type = Directory::class, nodeRef = rootRef)
     }
 
-    fun size(): Long {
-        return bitmap.reserved.size
-    }
-
-    fun createDirectory(parent: Directory, child: Unknown) {
-        val parentLock = segments.lock(parent.nodeRef)
-        parentLock.use(Write) {
-            NodeStore.createDirectory(segments, parent, child)
-        }
+    fun used(): Long {
+        return bitmapStore.reserved.size
     }
 
     fun newByteChannel(directory: Directory, childName: String, mode: MemoryChannelMode): MemorySeekableByteChannel {
-        val child = getOrCreateChild(directory, childName)
-        val childLock: MemoryFileLock = segments.lock(child.nodeRef)
+        val child = getOrCreateRegularFile(directory, childName)
+        val childLock: MemoryFileLock = blockStore.lock(child.nodeRef)
 
-        var dataSegmentRef: SegmentStart? = child.readDataRef()
+        var dataSegmentRef: BlockStart? = child.readDataRef()
         var dataSegment: MemoryBlock? = null
 
         if (dataSegmentRef == null) {
-            childLock.use(Write) {
+            childLock.use(MemoryChannelMode.WRITE) {
                 dataSegmentRef = child.readDataRef()
                 if (dataSegmentRef == null) {
-                    dataSegment = segments.reserveSegment()
-                    NodeStore.update(segments, child.nodeRef, dataSegment)
-                    dataSegmentRef = SegmentStart.of(dataSegment.start)
+                    dataSegment = blockStore.reserveSegment()
+                    update(nodeRef = child.nodeRef, newDataRef = dataSegment)
+                    dataSegmentRef = BlockStart.of(dataSegment.start)
                 }
             }
         }
 
-        if (dataSegment != null) {
-//            the data segment was just created
-            childLock.acquire(mode)
-            val dataSegmentByteChannel = dataSegment.newByteChannel(mode, childLock)
-            return dataSegmentByteChannel
-        } else {
-//            the data segment was already present, existing bytes need to be skipped
-            require(dataSegmentRef != null)
+        childLock.acquire(mode)
+        try {
+            if (dataSegment != null) {
+//                the data segment was just created
+                val dataSegmentByteChannel = dataSegment.newByteChannel(mode, childLock)
+                return dataSegmentByteChannel
+            } else {
+//                the data segment was already present, existing bytes need to be skipped
+                require(dataSegmentRef != null)
 
-            childLock.acquire(mode)
-            dataSegment = segments.findSegment(dataSegmentRef)
-            val dataSegmentByteChannel = dataSegment.newByteChannel(mode, childLock)
-            if (mode == MemoryChannelMode.Append) {
-                dataSegmentByteChannel.skipRemaining()
+                dataSegment = blockStore.findSegment(dataSegmentRef)
+                val dataSegmentByteChannel = dataSegment.newByteChannel(mode, childLock)
+                if (mode.append) {
+                    dataSegmentByteChannel.skipRemaining()
+                }
+                return dataSegmentByteChannel
             }
-            return dataSegmentByteChannel
+        } catch (e: Exception) {
+            childLock.release(mode)
+            throw e
         }
     }
 
-    private fun getOrCreateChild(parent: Directory, childName: String): RegularFile {
+    private fun getOrCreateRegularFile(parent: Directory, childName: String): RegularFile {
         val child = parent.findChildByName(childName)
         if (child != null) {
             return child as RegularFile
         }
-        val parentLock = segments.lock(parent.nodeRef)
-        return parentLock.use(Write) {
+        val parentLock = blockStore.lock(parent.nodeRef)
+        return parentLock.use(MemoryChannelMode.WRITE) {
             val child = parent.findChildByName(childName)
             if (child != null) {
                 return@use child as RegularFile
             }
-            return@use NodeStore.createRegularFile(
-                segments = segments,
+            return@use createRegularFile(
                 parent = parent,
                 child = RegularFile(
-                    segments = segments,
+                    fileSystem = this,
                     name = childName,
                 )
             )
@@ -139,19 +130,151 @@ internal class MemorySegmentFileSystem(
         }
         require(parent is Directory)
 
-        val parentLock = segments.lock(parent.nodeRef)
-        parentLock.use(Write) {
+        val parentLock = blockStore.lock(parent.nodeRef)
+        parentLock.use(MemoryChannelMode.WRITE) {
             parent.removeChildByName(child.name)
         }
-        val childLock = segments.lock(child.nodeRef)
-        childLock.use(Write) {
+        val childLock = blockStore.lock(child.nodeRef)
+        childLock.use(MemoryChannelMode.WRITE) {
             child.delete()
         }
     }
 
-    fun delete(offset: SegmentStart) {
-        val node = NodeStore.read(segments, Node::class, offset)
+    fun delete(offset: BlockStart) {
+        val node = read(Node::class, offset)
         node.delete()
+    }
+
+    fun createRegularFile(parent: Directory? = null, child: RegularFile): RegularFile {
+        if (child.name.isEmpty()) {
+            throw NodeValidationException()
+        }
+
+        val newDataSegment = blockStore.reserveSegment(name = child.name)
+        val serialized = newDataSegment.newByteChannel(mode = MemoryChannelMode.WRITE, null)
+        serialized.use {
+            write(serialized, child, NodeType.RegularFile)
+        }
+        val offset = serialized.offset()
+        val nodeRef = NodeRef(start = offset.start)
+        parent?.addChild(nodeRef)
+        return child.withNodeRef(nodeRef)
+    }
+
+    fun createDirectory(parent: Directory? = null, child: Node): NodeRef {
+        if (child.name.isEmpty()) {
+            throw NodeValidationException()
+        }
+
+        val parentLock = blockStore.lock(offset = parent?.nodeRef ?: NodeRef(-1))
+        parentLock.use(MemoryChannelMode.WRITE) {
+            val newDataSegment = blockStore.reserveSegment()
+            val serialized = newDataSegment.newByteChannel(mode = MemoryChannelMode.WRITE, null)
+            serialized.use {
+                write(serialized, child, NodeType.Directory)
+            }
+            val offset = serialized.offset()
+            val nodeRef = NodeRef(start = offset.start)
+            parent?.addChild(nodeRef)
+            return nodeRef
+        }
+    }
+
+    private fun write(serialized: MemorySeekableByteChannel, node: Node, fileType: NodeType) {
+        serialized.writeInt(fileType.ordinal)
+        serialized.writeLong(node.dataRef.start)
+        serialized.writeLong(node.attrRef.start)
+        serialized.writeString(node.name)
+    }
+
+    fun update(nodeRef: BlockStart, prevDataRef: BlockStart, children: List<Long>) {
+        if (prevDataRef.isValid()) {
+            val oldDataSegment = blockStore.findSegment(prevDataRef)
+            oldDataSegment.use {
+                blockStore.releaseAll(oldDataSegment)
+            }
+        }
+
+        if (children.isNotEmpty()) {
+            val newDataSegment: MemoryBlock = blockStore.reserveSegment()
+            val newDataByteChannel = newDataSegment.newByteChannel(mode = MemoryChannelMode.WRITE, null)
+            newDataByteChannel.use {
+                newDataByteChannel.writeRefs(children)
+            }
+
+            val nodeSegment = blockStore.findSegment(nodeRef)
+            val nodeSegmentChannel = nodeSegment.newByteChannel(mode = MemoryChannelMode.WRITE, null)
+            nodeSegmentChannel.use {
+                nodeSegmentChannel.skipInt()
+                nodeSegmentChannel.writeLong(newDataSegment.start)
+                nodeSegmentChannel.skipRemaining()
+            }
+        } else {
+            val nodeSegment = blockStore.findSegment(nodeRef)
+            val nodeSegmentChannel = nodeSegment.newByteChannel(mode = MemoryChannelMode.WRITE, null)
+            nodeSegmentChannel.use {
+                nodeSegmentChannel.skipInt()
+                nodeSegmentChannel.writeLong(-1L)
+                nodeSegmentChannel.skipRemaining()
+            }
+        }
+    }
+
+    fun update(nodeRef: BlockStart, newDataRef: BlockStart) {
+        val nodeSegment = blockStore.findSegment(nodeRef)
+        val nodeSegmentChannel = nodeSegment.newByteChannel(mode = MemoryChannelMode.WRITE, null)
+        nodeSegmentChannel.use {
+            nodeSegmentChannel.skipInt()
+            nodeSegmentChannel.writeLong(newDataRef.start)
+            nodeSegmentChannel.skipRemaining()
+        }
+    }
+
+    fun readChildren(nodeRef: BlockStart, dataRef: BlockStart): Sequence<Long> {
+        val dataNode = blockStore.findSegment(dataRef)
+        dataNode.use {
+            val dataByteChannel = dataNode.newByteChannel(MemoryChannelMode.READ, null)
+            dataByteChannel.use {
+                val result = dataByteChannel.readRefs()
+                return result
+            }
+        }
+    }
+
+    fun <T : Any> read(type: KClass<T>, nodeRef: BlockStart): T {
+        val segment = blockStore.findSegment(offset = nodeRef)
+        val node = segment.newByteChannel(mode = MemoryChannelMode.READ, null)
+        node.use {
+            val fileTypeOrdinal = node.readInt()
+            val fileType = NodeType.entries[fileTypeOrdinal]
+            val dataRef = node.readLong()
+            val attrRef = node.readLong()
+            val name = node.readString()
+
+            if (fileType == NodeType.Directory) {
+                return type.cast(
+                    Directory(
+                        segments = this,
+                        nodeRef = nodeRef,
+                        dataRef = NodeRef(dataRef),
+                        attrRef = NodeRef(attrRef),
+                        name = name,
+                    )
+                )
+            } else if (fileType == NodeType.RegularFile) {
+                return type.cast(
+                    RegularFile(
+                        fileSystem = this,
+                        nodeRef = nodeRef,
+                        dataRef = NodeRef(dataRef),
+                        attrRef = NodeRef(attrRef),
+                        name = name,
+                    )
+                )
+            } else {
+                TODO("Not yet implemented")
+            }
+        }
     }
 
     override fun close() {

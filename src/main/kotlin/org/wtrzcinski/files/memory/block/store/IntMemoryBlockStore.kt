@@ -16,15 +16,15 @@
 
 package org.wtrzcinski.files.memory.block.store
 
-import org.wtrzcinski.files.memory.bitmap.BitmapGroup
-import org.wtrzcinski.files.memory.block.MemoryBlockByteBuffer
+import org.wtrzcinski.files.memory.bitmap.BitmapStoreGroup
+import org.wtrzcinski.files.memory.block.byteBuffer.IntMemoryBlockByteBuffer
+import org.wtrzcinski.files.memory.block.byteBuffer.MemoryBlockByteBuffer
 import org.wtrzcinski.files.memory.block.store.MemoryBlockStore.Companion.intByteSize
 import java.lang.foreign.MemorySegment
-import java.nio.ByteBuffer
 
 internal class IntMemoryBlockStore(
     memory: MemorySegment,
-    bitmap: BitmapGroup,
+    bitmap: BitmapStoreGroup,
     maxMemoryBlockByteSize: Long,
 ) : AbstractMemoryBlockStore(
     memory = memory,
@@ -35,11 +35,9 @@ internal class IntMemoryBlockStore(
 
     override val nextRefHeaderSize: Long = intByteSize
 
-    override fun writeMeta(byteBuffer: MemoryBlockByteBuffer, value: Long): ByteBuffer {
-        return byteBuffer.putInt(value.toInt())
-    }
-
-    override fun readMeta(byteBuffer: MemoryBlockByteBuffer): Long {
-        return byteBuffer.getInt().toLong()
+    override fun buffer(offset: Long, size: Long): MemoryBlockByteBuffer {
+        val asSlice: MemorySegment = memory.asSlice(offset, size)
+        val byteBuffer = asSlice.asByteBuffer()
+        return IntMemoryBlockByteBuffer(memorySegment = asSlice, byteBuffer = byteBuffer)
     }
 }

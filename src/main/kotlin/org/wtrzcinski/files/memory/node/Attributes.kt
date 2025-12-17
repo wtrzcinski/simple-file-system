@@ -14,8 +14,13 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.common
+package org.wtrzcinski.files.memory.node
 
-interface SegmentSize {
-    val size: Long
-}
+class Attributes(
+    val modified: Long = 0L,
+    val created: Long = 0L,
+    val accessed: Long = 0L,
+    val owner: String = "",
+    val group: String = "",
+    val permissions: String = "-".repeat(9),
+)

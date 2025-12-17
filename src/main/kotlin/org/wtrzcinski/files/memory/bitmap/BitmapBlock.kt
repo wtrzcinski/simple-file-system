@@ -16,7 +16,8 @@
 
 package org.wtrzcinski.files.memory.bitmap
 
-import org.wtrzcinski.files.memory.common.Segment
+import org.wtrzcinski.files.memory.common.Block
+import org.wtrzcinski.files.memory.common.DefaultBlock
 
 class BitmapBlock(
     start: Long,
@@ -24,9 +25,9 @@ class BitmapBlock(
     end: Long = start + size,
     val prev: Long = -1,
     val name: String? = null,
-) : Segment.DefaultSegment(start = start, size = size, end = end) {
+) : DefaultBlock(start = start, size = size, end = end) {
 
-    override fun subtract(other: Segment): BitmapBlock {
+    override fun subtract(other: Block): BitmapBlock {
         val subtract = super.subtract(other)
         return BitmapBlock(
             start = subtract.start,
@@ -52,12 +53,12 @@ class BitmapBlock(
         return first to second
     }
 
-    override fun join(next: Segment): BitmapBlock {
+    override fun join(next: Block): BitmapBlock {
         val join = super.join(next)
         return BitmapBlock(start = join.start, size = join.size, prev = this.prev, name = this.name)
     }
 
-    fun isRoot(): Boolean {
+    fun isFirst(): Boolean {
         return prev == -1L
     }
 

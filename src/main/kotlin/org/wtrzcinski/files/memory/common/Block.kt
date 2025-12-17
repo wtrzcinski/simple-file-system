@@ -18,39 +18,15 @@ package org.wtrzcinski.files.memory.common
 
 import org.wtrzcinski.files.memory.bitmap.BitmapBlock
 
-interface Segment : SegmentStart, SegmentSize, Comparable<Segment> {
+interface Block : BlockStart, BlockSize, Comparable<Block> {
 
     companion object {
-        fun of(byteOffset: Long, byteSize: Long): DefaultSegment {
-            return DefaultSegment(start = byteOffset, size = byteSize)
+        fun of(byteOffset: Long, byteSize: Long): DefaultBlock {
+            return DefaultBlock(start = byteOffset, size = byteSize)
         }
 
-        fun of(byteOffset: Long, byteSize: Int): DefaultSegment {
-            return DefaultSegment(start = byteOffset, size = byteSize.toLong())
-        }
-    }
-
-    open class DefaultSegment(
-        override val start: Long,
-        override val size: Long,
-        override val end: Long = start + size,
-    ) : Segment {
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (javaClass != other?.javaClass) return false
-
-            other as Segment
-
-            if (start != other.start) return false
-            if (size != other.size) return false
-
-            return true
-        }
-
-        override fun hashCode(): Int {
-            var result = start.hashCode()
-            result = 31 * result + size.hashCode()
-            return result
+        fun of(byteOffset: Long, byteSize: Int): DefaultBlock {
+            return DefaultBlock(start = byteOffset, size = byteSize.toLong())
         }
     }
 
@@ -58,15 +34,15 @@ interface Segment : SegmentStart, SegmentSize, Comparable<Segment> {
 
     val end: Long get() = start + size
 
-    fun contains(other: SegmentStart): Boolean {
+    fun contains(other: BlockStart): Boolean {
         return this.start <= other.start && other.start <= this.end
     }
 
-    fun contains(other: Segment): Boolean {
+    fun contains(other: Block): Boolean {
         return this.start <= other.start && other.end <= this.end
     }
 
-    fun subtract(other: Segment): DefaultSegment {
+    fun subtract(other: Block): DefaultBlock {
         if (this.end == other.end) {
             return BitmapBlock(
                 start = start,
@@ -76,13 +52,13 @@ interface Segment : SegmentStart, SegmentSize, Comparable<Segment> {
         TODO("Not yet implemented")
     }
 
-    fun divide(newSize: Long): Pair<DefaultSegment, DefaultSegment> {
+    fun divide(newSize: Long): Pair<Block, Block> {
         if (this.size > newSize) {
-            val first = DefaultSegment(
+            val first = DefaultBlock(
                 start = this.start,
                 size = newSize,
             )
-            val second = DefaultSegment(
+            val second = DefaultBlock(
                 start = this.start + newSize,
                 size = this.size - newSize
             )
@@ -91,9 +67,9 @@ interface Segment : SegmentStart, SegmentSize, Comparable<Segment> {
         TODO("Not yet implemented")
     }
 
-    fun join(next: Segment): DefaultSegment {
+    fun join(next: Block): DefaultBlock {
         if (this.end == next.start) {
-            return DefaultSegment(
+            return DefaultBlock(
                 start = this.start,
                 size = this.size + next.size,
             )
@@ -101,7 +77,7 @@ interface Segment : SegmentStart, SegmentSize, Comparable<Segment> {
         TODO("Not yet implemented")
     }
 
-    override fun compareTo(other: Segment): Int {
+    override fun compareTo(other: Block): Int {
         val compareTo = start.compareTo(other.start)
         if (compareTo != 0) {
             return compareTo

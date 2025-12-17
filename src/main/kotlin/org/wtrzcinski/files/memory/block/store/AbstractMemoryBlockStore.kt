@@ -16,22 +16,21 @@
 
 package org.wtrzcinski.files.memory.block.store
 
-import org.wtrzcinski.files.memory.bitmap.BitmapGroup
+import org.wtrzcinski.files.memory.bitmap.BitmapStoreGroup
 import org.wtrzcinski.files.memory.block.MemoryBlock
-import org.wtrzcinski.files.memory.block.MemoryBlockByteBuffer
-import org.wtrzcinski.files.memory.common.Segment
-import org.wtrzcinski.files.memory.common.SegmentStart
+import org.wtrzcinski.files.memory.common.Block
+import org.wtrzcinski.files.memory.common.BlockStart
 import org.wtrzcinski.files.memory.lock.MemoryFileLock
-import org.wtrzcinski.files.memory.lock.MutexMemoryFileLock
+import org.wtrzcinski.files.memory.lock.ReadWriteMemoryFileLock
 import java.util.concurrent.ConcurrentHashMap
 
 internal abstract class AbstractMemoryBlockStore(
     val memory: java.lang.foreign.MemorySegment,
-    val bitmap: BitmapGroup,
+    val bitmap: BitmapStoreGroup,
     val maxMemoryBlockSize: Long,
 ) : MemoryBlockStore {
 
-    private val locks = ConcurrentHashMap<Long, MutexMemoryFileLock>()
+    private val locks = ConcurrentHashMap<Long, ReadWriteMemoryFileLock>()
 
     val minBodyByteSize: Long get() = MemoryBlockStore.longByteSize
 
@@ -39,17 +38,17 @@ internal abstract class AbstractMemoryBlockStore(
 
     val minMemoryBlockSize: Long get() = headerSize + minBodyByteSize
 
-    override fun lock(offset: SegmentStart): MemoryFileLock {
+    override fun lock(offset: BlockStart): MemoryFileLock {
         return locks.compute(offset.start) { _, value ->
-            return@compute value ?: MutexMemoryFileLock(offset)
+            return@compute value ?: ReadWriteMemoryFileLock(offset)
         } as MemoryFileLock
     }
 
-    override fun findSegment(offset: SegmentStart): MemoryBlock {
+    override fun findSegment(offset: BlockStart): MemoryBlock {
         return MemoryBlock(segments = this, start = offset.start)
     }
 
-    override fun releaseAll(other: Segment) {
+    override fun releaseAll(other: Block) {
         bitmap.releaseAll(other = other)
     }
 
@@ -68,11 +67,5 @@ internal abstract class AbstractMemoryBlockStore(
             initialBodySize = bodyByteSize,
             initialNextRef = -1,
         )
-    }
-
-    override fun buffer(offset: Long, size: Long): MemoryBlockByteBuffer {
-        val asSlice: java.lang.foreign.MemorySegment = memory.asSlice(offset, size)
-        val byteBuffer = asSlice.asByteBuffer()
-        return MemoryBlockByteBuffer(segments = this, byteBuffer = byteBuffer)
     }
 }

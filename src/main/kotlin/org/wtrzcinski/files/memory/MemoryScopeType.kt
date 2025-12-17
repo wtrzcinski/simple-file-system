@@ -1,7 +1,24 @@
+/**
+ * Copyright 2025 Wojciech Trzciński
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.wtrzcinski.files.memory
 
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import java.net.URI
 import java.nio.channels.FileChannel
 import java.nio.channels.FileChannel.MapMode.READ_WRITE
 import java.nio.file.Files
@@ -12,26 +29,14 @@ import java.util.function.Supplier
 
 internal enum class MemoryScopeType {
     HEAP {
-        override fun createFactory(capacity: Long): MemorySegmentFactory {
-            return object : MemorySegmentFactory {
-                override fun byteSize(): Long {
-                    return capacity
-                }
-
-                override fun create(): MemorySegment {
-                    return MemorySegment.ofArray(ByteArray(capacity.toInt()))
-                }
-
-                override fun close() {
-                }
-            }
+        override fun createFactory(env: Map<String, *>): MemorySegmentFactory {
+            return HeapMemorySegmentFactory()
         }
     },
 
     GLOBAL {
-        override fun createFactory(capacity: Long): MemorySegmentFactory {
+        override fun createFactory(env: Map<String, *>): MemorySegmentFactory {
             return ArenaMemorySegmentFactory(
-                capacity = capacity,
                 arenaSupplier = { Arena.global() },
                 closeable = false,
             )
@@ -39,9 +44,8 @@ internal enum class MemoryScopeType {
     },
 
     AUTO {
-        override fun createFactory(capacity: Long): MemorySegmentFactory {
+        override fun createFactory(env: Map<String, *>): MemorySegmentFactory {
             return ArenaMemorySegmentFactory(
-                capacity = capacity,
                 arenaSupplier = { Arena.ofAuto() },
                 closeable = false,
             )
@@ -49,9 +53,8 @@ internal enum class MemoryScopeType {
     },
 
     SHARED {
-        override fun createFactory(capacity: Long): MemorySegmentFactory {
+        override fun createFactory(env: Map<String, *>): MemorySegmentFactory {
             return ArenaMemorySegmentFactory(
-                capacity = capacity,
                 arenaSupplier = { Arena.ofShared() },
                 closeable = true,
             )
@@ -59,9 +62,8 @@ internal enum class MemoryScopeType {
     },
 
     CONFINED {
-        override fun createFactory(capacity: Long): MemorySegmentFactory {
+        override fun createFactory(env: Map<String, *>): MemorySegmentFactory {
             return ArenaMemorySegmentFactory(
-                capacity = capacity,
                 arenaSupplier = { Arena.ofConfined() },
                 closeable = true,
             )
@@ -69,60 +71,76 @@ internal enum class MemoryScopeType {
     },
 
     TMP_FILE {
-        override fun createFactory(capacity: Long): MemorySegmentFactory {
+        override fun createFactory(env: Map<String, *>): MemorySegmentFactory {
             return FileChannelMemorySegmentFactory(
-                capacity = capacity,
-                file = Files.createTempFile("memory", ".txt"),
-                options = setOf(TRUNCATE_EXISTING, READ, WRITE, DELETE_ON_CLOSE),
+                path = Files.createTempFile("memory", ".txt"),
+                options = setOf(TRUNCATE_EXISTING, READ, WRITE, DELETE_ON_CLOSE, SPARSE),
             )
         }
     },
+
+    PATH {
+        override fun createFactory(env: Map<String, *>): MemorySegmentFactory {
+            val pathName = env["path"]?.toString() ?: throw IllegalArgumentException("Missing path parameter")
+            val options = env["options"]?.toString()?.split(",")?.map { it.trim() }?.map { StandardOpenOption.valueOf(it) } ?: emptyList()
+            var file: Path = try {
+                val uri = URI.create(pathName)
+                Path.of(uri)
+            } catch (_: IllegalArgumentException) {
+                Path.of(pathName)
+            }
+
+            val options1 = mutableSetOf(READ, WRITE)
+            options1.addAll(options)
+            return FileChannelMemorySegmentFactory(
+                path = file,
+                options = options1,
+            )
+        }
+    }
     ;
 
     companion object {
         val DEFAULT: MemoryScopeType = HEAP
     }
 
-    abstract fun createFactory(capacity: Long): MemorySegmentFactory
+    abstract fun createFactory(env: Map<String, *>): MemorySegmentFactory
 
-    class FileChannelMemorySegmentFactory(
-        file: Path,
-        private val capacity: Long,
-        val options: Set<StandardOpenOption>,
-    ) : MemorySegmentFactory {
-        private val newByteChannel: FileChannel = FileChannel.open(file, options)
-        private val arena: Arena = Arena.ofShared()
-
-        override fun byteSize(): Long {
-            return capacity
-        }
-
-        override fun create(): MemorySegment {
-            return newByteChannel.map(READ_WRITE, 0, capacity, arena)
+    class HeapMemorySegmentFactory : MemorySegmentFactory {
+        override fun allocate(byteSize: Long, byteAlignmen: Long): MemorySegment {
+            return MemorySegment.ofArray(ByteArray(byteSize.toInt()))
         }
 
         override fun close() {
-            try {
+        }
+    }
+
+    class FileChannelMemorySegmentFactory(
+        path: Path,
+        val options: Set<StandardOpenOption>,
+    ) : MemorySegmentFactory {
+        private val newByteChannel: FileChannel = FileChannel.open(path, options)
+        private val arena: Arena = Arena.ofShared()
+
+        override fun allocate(byteSize: Long, byteAlignmen: Long): MemorySegment {
+            return newByteChannel.map(READ_WRITE, 0, byteSize, arena)
+        }
+
+        override fun close() {
+            arena.use {
                 newByteChannel.close()
-            } finally {
-                arena.close()
             }
         }
     }
 
     class ArenaMemorySegmentFactory(
-        private val capacity: Long,
         private val arenaSupplier: Supplier<Arena>,
         private val closeable: Boolean,
     ) : MemorySegmentFactory {
         @Volatile
         private var arena: Arena? = null
 
-        override fun byteSize(): Long {
-            return capacity
-        }
-
-        override fun create(): MemorySegment {
+        override fun allocate(byteSize: Long, byteAlignmen: Long): MemorySegment {
             if (arena == null) {
                 synchronized(this) {
                     if (arena == null) {
@@ -130,7 +148,7 @@ internal enum class MemoryScopeType {
                     }
                 }
             }
-            return arena!!.allocate(capacity, 1)
+            return arena!!.allocate(byteSize, byteAlignmen)
         }
 
         override fun close() {

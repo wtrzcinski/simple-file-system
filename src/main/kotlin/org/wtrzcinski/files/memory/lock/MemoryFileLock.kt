@@ -1,7 +1,3 @@
-package org.wtrzcinski.files.memory.lock
-
-import org.wtrzcinski.files.memory.channels.MemoryChannelMode
-
 /**
  * Copyright 2025 Wojciech Trzciński
  *
@@ -18,6 +14,11 @@ import org.wtrzcinski.files.memory.channels.MemoryChannelMode
  * limitations under the License.
  */
 
+package org.wtrzcinski.files.memory.lock
+
+import org.wtrzcinski.files.memory.channels.MemoryChannelMode
+import java.nio.file.StandardOpenOption
+
 interface MemoryFileLock {
     fun acquire(mode: MemoryChannelMode): MemoryFileLock
 
@@ -25,7 +26,7 @@ interface MemoryFileLock {
 
     companion object {
         inline fun <T> MemoryFileLock.use(block: () -> T): T {
-            return use(MemoryChannelMode.Write, block)
+            return use(MemoryChannelMode(StandardOpenOption.WRITE), block)
         }
 
         inline fun <T> MemoryFileLock.use(mode: MemoryChannelMode, block: () -> T): T {

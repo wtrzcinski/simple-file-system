@@ -29,16 +29,48 @@ import java.util.stream.Stream
 
 class TestArgumentsProvider : ArgumentsProvider {
     override fun provideArguments(parameters: ParameterDeclarations, context: ExtensionContext): Stream<out Arguments> {
+        val capacity = 1024 * 1024 * 4
+        val blockSize = 256
+
+        val tempFile = Files.createTempFile("jsmsfs", ".txt")
         return MemoryScopeType
             .entries
             .filter { it != MemoryScopeType.CONFINED }
-            .map { Arguments.argumentSet(it.name, newMemoryFileSystem(it)) }
+            .map {
+                if (it == MemoryScopeType.PATH) {
+                    Arguments.argumentSet(
+                        it.name,
+                        newMemoryFileSystem(
+                            name = "jsmsfs:///?scope=$it",
+                            env = mapOf(
+                                "scope" to it,
+                                "options" to "DELETE_ON_CLOSE, SPARSE",
+                                "path" to tempFile,
+                                "capacity" to capacity,
+                                "blockSize" to blockSize,
+                            )
+                        )
+                    )
+                } else {
+                    Arguments.argumentSet(
+                        it.name,
+                        newMemoryFileSystem(
+                            name = "jsmsfs:///?scope=$it",
+                            env = mapOf(
+                                "scope" to it,
+                                "capacity" to capacity,
+                                "blockSize" to blockSize,
+                            )
+                        )
+                    )
+                }
+            }
             .stream()
     }
 
-    private fun newMemoryFileSystem(scope: MemoryScopeType): DeleteOnClosePathProvider {
-        val env = mapOf("scope" to scope.name, "capacity" to 1024 * 1024 * 4, "blockSize" to 256)
-        val fileSystem = FileSystems.newFileSystem(URI.create("memory:///"), env)
+    private fun newMemoryFileSystem(name: String, env: Map<String, Any>): DeleteOnClosePathProvider {
+        val uri = URI.create(name)
+        val fileSystem = FileSystems.newFileSystem(uri, env)
         val rootDirectory = fileSystem.getPath("/")
         return DeleteOnClosePathProvider(
             delegate = SubpathPathProvider(rootDirectory),

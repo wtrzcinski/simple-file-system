@@ -20,6 +20,7 @@ import org.wtrzcinski.files.memory.node.Directory
 import java.nio.file.DirectoryStream
 import java.nio.file.Path
 
+// todo implement SecureDirectoryStream for unix
 internal class SimpleMemoryDirectoryStream(
     val path: SimpleMemoryPath,
     val filter: DirectoryStream.Filter<in Path>,

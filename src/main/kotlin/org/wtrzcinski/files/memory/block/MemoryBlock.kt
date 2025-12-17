@@ -16,19 +16,20 @@
 
 package org.wtrzcinski.files.memory.block
 
+import org.wtrzcinski.files.memory.block.byteBuffer.MemoryBlockByteBuffer
+import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
 import org.wtrzcinski.files.memory.channels.MemoryChannelMode
 import org.wtrzcinski.files.memory.channels.MemorySeekableByteChannel
-import org.wtrzcinski.files.memory.common.Segment
-import org.wtrzcinski.files.memory.common.SegmentStart
+import org.wtrzcinski.files.memory.common.Block
+import org.wtrzcinski.files.memory.common.BlockStart
 import org.wtrzcinski.files.memory.lock.MemoryFileLock
-import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
 
 internal class MemoryBlock(
     private val segments: MemoryBlockStore,
     override var start: Long,
     initialBodySize: Long? = null,
     initialNextRef: Long? = null,
-) : Segment, AutoCloseable {
+) : Block, AutoCloseable {
 
     init {
         if (initialBodySize != null) {
@@ -48,7 +49,7 @@ internal class MemoryBlock(
     val bodySize: Long
         get() {
             val byteBuffer = newBodySizeBuffer()
-            return segments.readMeta(byteBuffer = byteBuffer)
+            return byteBuffer.readMeta()
         }
 
     val bodyBuffer: MemoryBlockByteBuffer by lazy {
@@ -61,11 +62,7 @@ internal class MemoryBlock(
         }
 
     fun newByteChannel(mode: MemoryChannelMode, lock: MemoryFileLock? = null): MemorySeekableByteChannel {
-        return MemorySeekableByteChannel(
-            start = this,
-            mode = mode,
-            lock = lock,
-        )
+        return MemorySeekableByteChannel(start = this, mode = mode, lock = lock)
     }
 
     fun remaining(): Int {
@@ -93,11 +90,11 @@ internal class MemoryBlock(
         return null
     }
 
-    fun readNextRef(): SegmentStart? {
+    fun readNextRef(): BlockStart? {
         val byteBuffer = newNextRefBuffer()
         val nextRef = byteBuffer.readMeta()
         if (nextRef > 0) {
-            return SegmentStart.of(nextRef)
+            return BlockStart.of(nextRef)
         }
         return null
     }

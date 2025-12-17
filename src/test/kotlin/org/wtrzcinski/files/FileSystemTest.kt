@@ -17,6 +17,7 @@
 package org.wtrzcinski.files
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.Parameter
 import org.junit.jupiter.params.ParameterizedClass
@@ -24,9 +25,10 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import org.wtrzcinski.files.arguments.PathProvider
 import org.wtrzcinski.files.arguments.TestArgumentsProvider
 import org.wtrzcinski.files.common.Fixtures.newAlphanumericString
+import org.wtrzcinski.files.common.Fixtures.newRandomPath
 import org.wtrzcinski.files.common.Fixtures.newUniqueString
-import java.nio.ByteBuffer
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import kotlin.io.path.createParentDirectories
 
@@ -35,6 +37,8 @@ import kotlin.io.path.createParentDirectories
 class FileSystemTest {
     @Parameter
     lateinit var pathProvider: PathProvider
+
+    private val tmpdir = System.getProperty("java.io.tmpdir")
 
     @Test
     fun `should create file`() {
@@ -127,6 +131,36 @@ class FileSystemTest {
 
         assertThat(Files.exists(givenFileName1)).isFalse()
         assertThat(Files.readString(givenFileName2)).isEqualTo(givenFileContent)
+    }
+
+    @Disabled
+    @Test
+    fun `should move file to different file system`() {
+        val givenFileName1 = pathProvider.getPath(newUniqueString())
+        val givenFileName2 = Path.of("$tmpdir/${newUniqueString()}.data")
+        val givenFileContent = newUniqueString()
+
+        Files.writeString(givenFileName1, givenFileContent, Charsets.UTF_8, StandardOpenOption.CREATE)
+        Files.move(givenFileName1, givenFileName2)
+
+        assertThat(Files.exists(givenFileName1)).isFalse()
+        assertThat(Files.readString(givenFileName2)).isEqualTo(givenFileContent)
+        Files.delete(givenFileName2)
+    }
+
+    @Disabled
+    @Test
+    fun `should move file from different file system`() {
+        val givenFileName1 = Path.of("$tmpdir/${newUniqueString()}.data")
+        val givenFileName2 = pathProvider.getPath(newUniqueString())
+        val givenFileContent = newUniqueString()
+
+        Files.writeString(givenFileName1, givenFileContent, Charsets.UTF_8, StandardOpenOption.CREATE)
+        Files.move(givenFileName1, givenFileName2)
+
+        assertThat(Files.exists(givenFileName1)).isFalse()
+        assertThat(Files.readString(givenFileName2)).isEqualTo(givenFileContent)
+        Files.delete(givenFileName1)
     }
 
     @Test

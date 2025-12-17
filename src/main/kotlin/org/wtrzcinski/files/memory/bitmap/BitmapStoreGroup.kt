@@ -16,18 +16,18 @@
 
 package org.wtrzcinski.files.memory.bitmap
 
-import org.wtrzcinski.files.memory.common.Segment
+import org.wtrzcinski.files.memory.common.Block
 import org.wtrzcinski.files.memory.lock.MemoryFileLock
 import org.wtrzcinski.files.memory.lock.MemoryFileLock.Companion.use
-import org.wtrzcinski.files.memory.lock.MutexMemoryFileLock
+import org.wtrzcinski.files.memory.lock.ReadWriteMemoryFileLock
 
-class BitmapGroup(memoryOffset: Long, private val memoryByteSize: Long) : Bitmap {
+class BitmapStoreGroup(memoryOffset: Long, private val memoryByteSize: Long) : BitmapStore {
 
-    private val lock: MemoryFileLock = MutexMemoryFileLock()
+    private val lock: MemoryFileLock = ReadWriteMemoryFileLock()
 
-    override val free: BitmapFreeSegments = BitmapFreeSegments()
+    override val free: BitmapFreeBlocks = BitmapFreeBlocks()
 
-    override val reserved: BitmapReservedSegments = BitmapReservedSegments()
+    override val reserved: BitmapReservedBlocks = BitmapReservedBlocks()
 
     init {
         free.add(BitmapBlock(start = memoryOffset, size = memoryByteSize))
@@ -51,11 +51,11 @@ class BitmapGroup(memoryOffset: Long, private val memoryByteSize: Long) : Bitmap
         }
     }
 
-    override fun releaseAll(other: Segment) {
+    override fun releaseAll(other: Block) {
         lock.use {
             val reserved = reserved.copy()
 
-            val addToFree = mutableListOf<Segment>()
+            val addToFree = mutableListOf<Block>()
             val addToReserved = mutableListOf<BitmapBlock>()
             val removeFromReserved = mutableListOf<BitmapBlock>()
             for (segment in reserved) {

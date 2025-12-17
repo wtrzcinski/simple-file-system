@@ -16,53 +16,31 @@
 
 package org.wtrzcinski.files.memory.node
 
-import org.wtrzcinski.files.memory.common.SegmentStart
-import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
+import org.wtrzcinski.files.memory.MemorySegmentFileSystem
+import org.wtrzcinski.files.memory.common.BlockStart
 
 internal class Directory(
-    segments: MemoryBlockStore,
-    nodeRef: SegmentStart = NodeRef(-1),
-    dataRef: SegmentStart,
-    modified: Long = 0L,
-    created: Long = 0L,
-    accessed: Long = 0L,
-    permissions: String = "-".repeat(9),
+    segments: MemorySegmentFileSystem,
+    nodeRef: BlockStart = NodeRef(-1),
+    dataRef: BlockStart,
+    attrRef: BlockStart,
     name: String,
 ) : Node(
-    segments = segments,
+    fileSystem = segments,
     nodeRef = nodeRef,
     fileType = NodeType.Directory,
-    name = name,
-    modified = modified,
-    created = created,
-    accessed = accessed,
-    permissions = permissions,
     dataRef = dataRef,
+    attrRef = attrRef,
+    name = name,
 ) {
     override fun withNodeRef(nodeRef: NodeRef): Node {
         return Directory(
-            segments = segments,
+            segments = fileSystem,
             nodeRef = nodeRef,
             dataRef = dataRef,
-            modified = modified,
-            created = created,
-            accessed = accessed,
-            permissions = permissions,
+            attrRef = attrRef,
             name = name,
         )
-    }
-
-    override fun delete() {
-        if (dataRef.isValid()) {
-            val dataSegment = segments.findSegment(dataRef)
-            dataSegment.use {
-                dataSegment.release()
-            }
-        }
-        val fileSegment = segments.findSegment(nodeRef)
-        fileSegment.use {
-            fileSegment.release()
-        }
     }
 
     fun addChild(childRef: NodeRef) {
@@ -70,7 +48,7 @@ internal class Directory(
         children.addAll(findChildIds())
         children.add(childRef.start)
         children.sort()
-        NodeStore.update(segments, nodeRef, dataRef, children)
+        fileSystem.update(nodeRef, dataRef, children)
     }
 
     fun removeChildByName(name: String) {
@@ -81,7 +59,7 @@ internal class Directory(
         val children = mutableListOf<Long>()
         children.addAll(findChildIds)
         children.remove(findChildByName.nodeRef.start)
-        NodeStore.update(segments, nodeRef, dataRef, children)
+        fileSystem.update(nodeRef, dataRef, children)
     }
 
     fun findChildByName(name: String): Node? {
@@ -90,20 +68,20 @@ internal class Directory(
     }
 
     fun findChildren(): Sequence<Node> {
-        return findChildIds().map { NodeStore.read(segments, Node::class, NodeRef(it)) }
+        return findChildIds().map { fileSystem.read( Node::class, NodeRef(it)) }
     }
 
     fun findChildIds(): Sequence<Long> {
         val findData = this.readDataRef()
         if (findData != null) {
-            return NodeStore.readChildren(segments, nodeRef, findData)
+            return fileSystem.readChildren(nodeRef, findData)
         }
         return sequenceOf()
     }
 
-    private fun findChildByName(findChildIds: Sequence<Long>, name: String): Node? {
-        for (ref in findChildIds) {
-            val node = NodeStore.read(segments, Node::class, NodeRef(ref))
+    private fun findChildByName(ids: Sequence<Long>, name: String): Node? {
+        for (id in ids) {
+            val node = fileSystem.read( Node::class, NodeRef(id))
             if (node.name == name) {
                 return node
             }

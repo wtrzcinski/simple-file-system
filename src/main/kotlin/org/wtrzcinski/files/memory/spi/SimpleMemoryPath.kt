@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wtrzcinski.files.memory.spi
 
 import org.wtrzcinski.files.memory.node.Directory
@@ -23,7 +24,7 @@ import java.net.URI
 import java.nio.file.*
 
 internal data class SimpleMemoryPath(
-    val fs: FileSystem,
+    val fs: SimpleMemoryFileSystem,
     val parent: SimpleMemoryPath?,
     private val nodeSupplier: (SimpleMemoryPath?) -> Node,
     private val absolute: Boolean = true,
@@ -31,12 +32,13 @@ internal data class SimpleMemoryPath(
 
     val node: Node get() = nodeSupplier(parent)
 
-    override fun getFileSystem(): FileSystem {
+    override fun getFileSystem(): SimpleMemoryFileSystem {
         return fs
     }
 
     override fun resolve(other: Path): Path {
-        other as SimpleMemoryPath
+        require(other is SimpleMemoryPath)
+
         val otherNode = other.node
         if (otherNode.name.isBlank()) {
             return this
@@ -69,9 +71,9 @@ internal data class SimpleMemoryPath(
 
                 if (directory is Directory) {
                     val existing = directory.findChildByName(name)
-                    existing ?: Unknown(directory.segments, name = name)
+                    existing ?: Unknown(directory.fileSystem, name = name)
                 } else {
-                    Unknown(directory.segments, name = name)
+                    Unknown(directory.fileSystem, name = name)
                 }
             }
         }
@@ -98,9 +100,11 @@ internal data class SimpleMemoryPath(
     }
 
     override fun toUri(): URI {
-        val scheme = fileSystem.provider().scheme
+        val provider = fileSystem.provider()
+
+        val scheme = provider.scheme
         val joinToString = toStringList().joinToString(File.separator)
-        return URI.create("$scheme:/$joinToString")
+        return URI.create("$scheme:/$joinToString?${fileSystem.name}")
     }
 
     fun toStringList(): List<String> {
@@ -111,14 +115,14 @@ internal data class SimpleMemoryPath(
     }
 
     fun toNodeList(): List<Node> {
-        val names = mutableListOf<Node>()
+        val nodes = mutableListOf<Node>()
         var current: SimpleMemoryPath? = this
         while (current != null) {
             val node1 = current.node
-            names.add(node1)
+            nodes.add(node1)
             current = current.parent
         }
-        val result = names.reversed()
+        val result = nodes.reversed()
         return result
     }
 

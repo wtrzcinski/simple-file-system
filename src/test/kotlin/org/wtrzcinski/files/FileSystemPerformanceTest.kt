@@ -40,7 +40,7 @@ import kotlin.time.measureTime
 @Suppress("ConstPropertyName")
 class FileSystemPerformanceTest {
     companion object {
-        private const val repeats = 100
+        private const val repeats = 1000
         private const val threads = 100
     }
 
@@ -57,7 +57,7 @@ class FileSystemPerformanceTest {
             }
         }
 
-        println("upsert: $fileSystem $duration")
+        println("upsert: $duration $fileSystem")
     }
 
     @Test
@@ -77,7 +77,7 @@ class FileSystemPerformanceTest {
                 assertThat(actual).contains(givenFileContent)
             }
         }
-        println("read: $fileSystem $duration")
+        println("read: $duration $fileSystem")
     }
 
     @Test
@@ -100,7 +100,7 @@ class FileSystemPerformanceTest {
                     assertThat(actual).isFalse()
                 }
         }
-        println("delete $fileSystem $duration")
+        println("delete $duration $fileSystem")
     }
 
     @Test
@@ -114,7 +114,7 @@ class FileSystemPerformanceTest {
         val actualList = CopyOnWriteArrayList<String>()
         repeat(threads) {
             val submit: Future<*> = pool.submit {
-                val givenFileContent = newAlphanumericString(minLength = 1, maxLength = 512)
+                val givenFileContent = newAlphanumericString(maxLength = 512)
                 givenList.add(givenFileContent)
 
                 Files.writeString(givenFileName, givenFileContent, UTF_8)

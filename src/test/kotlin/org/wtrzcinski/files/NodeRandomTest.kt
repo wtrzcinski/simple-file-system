@@ -36,34 +36,34 @@ internal class NodeRandomTest {
         val repeats: Int = megabytes * 1_000
 
         init {
-            FileSystems.newFileSystem(URI.create("memory:///"), mapOf("capacity" to 1024 * 1024 * megabytes, "blockSize" to memoryBlockSize))
+            FileSystems.newFileSystem(URI.create("jsmsfs:///"), mapOf("capacity" to 1024 * 1024 * megabytes, "blockSize" to memoryBlockSize))
         }
     }
 
     @BeforeEach
     fun beforeEach() {
-        val parent = Path.of(URI.create("memory:///"))
+        val parent = Path.of(URI.create("jsmsfs:///"))
 
         val fileStore = parent.fileSystem.fileStores.first()
         val used = fileStore.totalSpace - fileStore.unallocatedSpace
-        assertThat(used).isEqualTo(62L)
+        assertThat(used).isEqualTo(33L)
     }
 
     @AfterEach
     fun afterEach() {
-        val parent = Path.of(URI.create("memory:///"))
+        val parent = Path.of(URI.create("jsmsfs:///"))
         val list = Files.list(parent)
         for (child in list) {
             Files.delete(child)
         }
         val fileStore = parent.fileSystem.fileStores.first()
         val used = fileStore.totalSpace - fileStore.unallocatedSpace
-        assertThat(used).isEqualTo(62L)
+        assertThat(used).isEqualTo(33L)
     }
 
     @Test
     fun `should create random files`() {
-        val parent = Path.of(URI.create("memory:///"))
+        val parent = Path.of(URI.create("jsmsfs:///"))
         repeat(repeats) {
             NodeTest.createRandomFile(parent = parent, minStringSize = minStringSize, maxStringSize = maxStringSize)
         }

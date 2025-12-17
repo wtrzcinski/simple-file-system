@@ -26,7 +26,7 @@ internal class SimpleMemoryFileStore(
 ) : FileStore() {
     val sizeFactor: Double
         get() {
-            val reserved = context.bitmap.reserved.size.toDouble()
+            val reserved = context.bitmapStore.reserved.size.toDouble()
             val result = reserved / context.memory.byteSize()
             require(result <= 1)
             return result
@@ -34,14 +34,14 @@ internal class SimpleMemoryFileStore(
 
     val headerSpaceFactor: Double
         get() {
-            val metadataSize: Double = (context.bitmap.reserved.count * context.segments.headerSize).toDouble()
-            return metadataSize / context.bitmap.reserved.size
+            val metadataSize: Double = (context.bitmapStore.reserved.count * context.blockStore.headerSize).toDouble()
+            return metadataSize / context.bitmapStore.reserved.size
         }
 
     val wastedSpaceFactor: Double
         get() {
-            val wastedSpaceSize = context.bitmap.free.findSizeSum(context.segments.minMemoryBlockSize)
-            return wastedSpaceSize / context.bitmap.reserved.size
+            val wastedSpaceSize = context.bitmapStore.free.findSizeSum(context.blockStore.minMemoryBlockSize)
+            return wastedSpaceSize / context.bitmapStore.reserved.size
         }
 
     override fun name(): String {
@@ -57,7 +57,7 @@ internal class SimpleMemoryFileStore(
     }
 
     override fun getUnallocatedSpace(): Long {
-        return context.segments.bitmap.free.size
+        return context.blockStore.bitmap.free.size
     }
 
     override fun getUsableSpace(): Long {

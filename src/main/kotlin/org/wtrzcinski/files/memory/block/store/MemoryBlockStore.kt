@@ -16,13 +16,12 @@
 
 package org.wtrzcinski.files.memory.block.store
 
-import org.wtrzcinski.files.memory.bitmap.BitmapGroup
+import org.wtrzcinski.files.memory.bitmap.BitmapStoreGroup
 import org.wtrzcinski.files.memory.block.MemoryBlock
-import org.wtrzcinski.files.memory.block.MemoryBlockByteBuffer
-import org.wtrzcinski.files.memory.common.Segment
-import org.wtrzcinski.files.memory.common.SegmentStart
+import org.wtrzcinski.files.memory.block.byteBuffer.MemoryBlockByteBuffer
+import org.wtrzcinski.files.memory.common.Block
+import org.wtrzcinski.files.memory.common.BlockStart
 import org.wtrzcinski.files.memory.lock.MemoryFileLock
-import java.nio.ByteBuffer
 
 @Suppress("MayBeConstant")
 internal interface MemoryBlockStore {
@@ -35,23 +34,26 @@ internal interface MemoryBlockStore {
 
     fun buffer(offset: Long, size: Long): MemoryBlockByteBuffer
 
-    fun readMeta(byteBuffer: MemoryBlockByteBuffer): Long
-
-    fun writeMeta(byteBuffer: MemoryBlockByteBuffer, value: Long): ByteBuffer
-
-    fun findSegment(offset: SegmentStart): MemoryBlock
+    fun findSegment(offset: BlockStart): MemoryBlock
 
     fun reserveSegment(prevOffset: Long = -1, name: String? = null): MemoryBlock
 
-    fun releaseAll(other: Segment)
+    fun releaseAll(nodeRef: BlockStart) {
+        val fileSegment = findSegment(nodeRef)
+        fileSegment.use {
+            fileSegment.release()
+        }
+    }
 
-    fun lock(offset: SegmentStart): MemoryFileLock
+    fun releaseAll(other: Block)
+
+    fun lock(offset: BlockStart): MemoryFileLock
 
     companion object {
-        val intByteSize: Long = 4
-        val longByteSize: Long = 8
+        val intByteSize: Long = Int.SIZE_BYTES.toLong()
+        val longByteSize: Long = Long.SIZE_BYTES.toLong()
 
-        fun of(memory: java.lang.foreign.MemorySegment, bitmap: BitmapGroup, maxMemoryBlockByteSize: Long): AbstractMemoryBlockStore {
+        operator fun invoke(memory: java.lang.foreign.MemorySegment, bitmap: BitmapStoreGroup, maxMemoryBlockByteSize: Long): AbstractMemoryBlockStore {
             if (memory.byteSize() > Int.MAX_VALUE) {
                 return LongMemoryBlockStore(
                     memory = memory,

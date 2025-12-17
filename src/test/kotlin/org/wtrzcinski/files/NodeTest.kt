@@ -19,15 +19,13 @@ package org.wtrzcinski.files
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.wtrzcinski.files.common.Fixtures.newAlphanumericString
-import org.wtrzcinski.files.memory.MemorySegmentFileSystem
 import org.wtrzcinski.files.memory.MemoryScopeType
+import org.wtrzcinski.files.memory.MemorySegmentFileSystem
 import org.wtrzcinski.files.memory.node.Node
 import org.wtrzcinski.files.memory.node.NodeRef
-import org.wtrzcinski.files.memory.node.NodeStore
 import org.wtrzcinski.files.memory.node.RegularFile
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.random.Random
 
 internal class NodeTest {
 
@@ -40,25 +38,25 @@ internal class NodeTest {
         val givenFileNode2 = newFileNode(fileSystem, "file2-file2-file2")
         val givenFileNode3 = newFileNode(fileSystem, "file3-file3-file3")
 
-        val reservedSizeAfterFirstFile = fileSystem.size()
-        val fileId1 = NodeStore.createRegularFile(fileSystem.segments, child = givenFileNode1)
-        val fileId2 = NodeStore.createRegularFile(fileSystem.segments, child = givenFileNode2)
+        val reservedSizeAfterFirstFile = fileSystem.used()
+        val fileId1 = fileSystem.createRegularFile(child = givenFileNode1)
+        val fileId2 = fileSystem.createRegularFile(child = givenFileNode2)
 
-        var actualRootNode = NodeStore.read(fileSystem.segments, Node::class, rootId)
-        var actualFileNode1 = NodeStore.read(fileSystem.segments, Node::class, fileId1.nodeRef)
-        var actualFileNode2 = NodeStore.read(fileSystem.segments, Node::class, fileId2.nodeRef)
+        var actualRootNode = fileSystem.read(Node::class, rootId)
+        var actualFileNode1 = fileSystem.read(Node::class, fileId1.nodeRef)
+        var actualFileNode2 = fileSystem.read(Node::class, fileId2.nodeRef)
         assertThat(actualRootNode).isEqualTo(givenRootNode)
         assertThat(actualFileNode1).isEqualTo(givenFileNode1)
         assertThat(actualFileNode2).isEqualTo(givenFileNode2)
 
-        val fileId3 = NodeStore.createRegularFile(fileSystem.segments, child = givenFileNode3)
+        val fileId3 = fileSystem.createRegularFile(child = givenFileNode3)
 
 //        delete file 1
         fileSystem.delete(fileId1.nodeRef)
-        actualRootNode = NodeStore.read(fileSystem.segments, Node::class, rootId)
-        actualFileNode1 = NodeStore.read(fileSystem.segments, Node::class, fileId1.nodeRef)
-        actualFileNode2 = NodeStore.read(fileSystem.segments, Node::class, fileId2.nodeRef)
-        var actualFileNode3 = NodeStore.read(fileSystem.segments, Node::class, fileId3.nodeRef)
+        actualRootNode = fileSystem.read(Node::class, rootId)
+        actualFileNode1 = fileSystem.read(Node::class, fileId1.nodeRef)
+        actualFileNode2 = fileSystem.read(Node::class, fileId2.nodeRef)
+        var actualFileNode3 = fileSystem.read(Node::class, fileId3.nodeRef)
         assertThat(actualRootNode).isEqualTo(givenRootNode)
         assertThat(actualFileNode1).isEqualTo(givenFileNode1)
         assertThat(actualFileNode2).isEqualTo(givenFileNode2)
@@ -66,10 +64,10 @@ internal class NodeTest {
 
 //        delete file 2
         fileSystem.delete(fileId2.nodeRef)
-        actualRootNode = NodeStore.read(fileSystem.segments, Node::class, rootId)
-        actualFileNode1 = NodeStore.read(fileSystem.segments, Node::class, fileId1.nodeRef)
-        actualFileNode2 = NodeStore.read(fileSystem.segments, Node::class, fileId2.nodeRef)
-        actualFileNode3 = NodeStore.read(fileSystem.segments, Node::class, fileId3.nodeRef)
+        actualRootNode = fileSystem.read(Node::class, rootId)
+        actualFileNode1 = fileSystem.read(Node::class, fileId1.nodeRef)
+        actualFileNode2 = fileSystem.read(Node::class, fileId2.nodeRef)
+        actualFileNode3 = fileSystem.read(Node::class, fileId3.nodeRef)
         assertThat(actualRootNode).isEqualTo(givenRootNode)
         assertThat(actualFileNode1).isEqualTo(givenFileNode1)
         assertThat(actualFileNode2).isEqualTo(givenFileNode2)
@@ -77,7 +75,7 @@ internal class NodeTest {
 
 //        delete file 3
         fileSystem.delete(fileId3.nodeRef)
-        assertThat(fileSystem.size()).isEqualTo(reservedSizeAfterFirstFile)
+        assertThat(fileSystem.used()).isEqualTo(reservedSizeAfterFirstFile)
     }
 
     companion object {
@@ -91,11 +89,10 @@ internal class NodeTest {
 
         fun newFileNode(fileSystem: MemorySegmentFileSystem, name: String): RegularFile {
             return RegularFile(
-                segments = fileSystem.segments,
+                fileSystem = fileSystem,
                 name = name,
-                modified = Random.nextLong(),
-                created = Random.nextLong(),
                 dataRef = NodeRef(-1L),
+                attrRef = NodeRef(-1L),
             )
         }
     }

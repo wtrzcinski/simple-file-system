@@ -23,11 +23,11 @@ import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
 
 @OptIn(ExperimentalAtomicApi::class)
-class BitmapReservedSegments {
+class BitmapReservedBlocks {
 
     private val reserved: CopyOnWriteArrayList<BitmapBlock> = CopyOnWriteArrayList()
 
-    private val roots: CopyOnWriteArrayList<BitmapBlock> = CopyOnWriteArrayList()
+    private val first: CopyOnWriteArrayList<BitmapBlock> = CopyOnWriteArrayList()
 
     private val reservedSize: AtomicLong = AtomicLong(0)
 
@@ -37,8 +37,8 @@ class BitmapReservedSegments {
 
     fun add(other: BitmapBlock) {
         reserved.add(other)
-        if (other.isRoot()) {
-            roots.add(other)
+        if (other.isFirst()) {
+            first.add(other)
         }
         this.reservedSize += other.size
     }
@@ -48,8 +48,8 @@ class BitmapReservedSegments {
         if (!remove) {
             throw BitmapOptimisticLockException()
         }
-        if (other.isRoot()) {
-            roots.remove(other)
+        if (other.isFirst()) {
+            first.remove(other)
         }
         this.reservedSize -= other.size
     }

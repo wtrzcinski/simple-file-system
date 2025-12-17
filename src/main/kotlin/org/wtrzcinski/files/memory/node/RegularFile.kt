@@ -16,52 +16,30 @@
 
 package org.wtrzcinski.files.memory.node
 
-import org.wtrzcinski.files.memory.common.SegmentStart
-import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
+import org.wtrzcinski.files.memory.MemorySegmentFileSystem
+import org.wtrzcinski.files.memory.common.BlockStart
 
 internal class RegularFile(
-    segments: MemoryBlockStore,
-    nodeRef: SegmentStart = NodeRef(-1),
-    dataRef: SegmentStart = SegmentStart.of(-1),
-    modified: Long = 0L,
-    created: Long = 0L,
-    accessed: Long = 0L,
-    permissions: String = "-".repeat(9),
+    fileSystem: MemorySegmentFileSystem,
+    nodeRef: BlockStart = NodeRef(-1),
+    dataRef: BlockStart = BlockStart.of(-1),
+    attrRef: BlockStart = BlockStart.of(-1),
     name: String,
 ) : Node(
-    segments = segments,
+    fileSystem = fileSystem,
     nodeRef = nodeRef,
     fileType = NodeType.RegularFile,
     dataRef = dataRef,
-    modified = modified,
-    created = created,
-    accessed = accessed,
-    permissions = permissions,
+    attrRef = attrRef,
     name = name,
 ) {
     override fun withNodeRef(nodeRef: NodeRef): RegularFile {
         return RegularFile(
-            segments = segments,
+            fileSystem = fileSystem,
             nodeRef = nodeRef,
             dataRef = dataRef,
-            modified = modified,
-            created = created,
-            accessed = accessed,
-            permissions = permissions,
+            attrRef = attrRef,
             name = name,
         )
-    }
-
-    override fun delete() {
-        if (dataRef.isValid()) {
-            val dataSegment = segments.findSegment(dataRef)
-            dataSegment.use {
-                dataSegment.release()
-            }
-        }
-        val fileSegment = segments.findSegment(nodeRef)
-        fileSegment.use {
-            fileSegment.release()
-        }
     }
 }

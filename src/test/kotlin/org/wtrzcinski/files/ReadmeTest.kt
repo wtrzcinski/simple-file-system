@@ -27,7 +27,7 @@ class ReadmeTest {
     @Test
     fun should() {
         val givenEnv = mapOf("capacity" to "1MB", "blockSize" to "1KB")
-        val givenFileSystem = FileSystems.newFileSystem(URI.create("memory:///"), givenEnv)
+        val givenFileSystem = FileSystems.newFileSystem(URI.create("jsmsfs:///"), givenEnv)
         val givenDirectoryPath = givenFileSystem.getPath("directory")
         val givenFilePath = givenDirectoryPath.resolve("file.txt")
         val givenFileContent = newAlphanumericString(minLength = 1024, maxLength = 1024 * 4)

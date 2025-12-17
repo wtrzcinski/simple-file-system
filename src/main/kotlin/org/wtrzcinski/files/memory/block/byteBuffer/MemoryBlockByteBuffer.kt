@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.block
+package org.wtrzcinski.files.memory.block.byteBuffer
 
-import org.wtrzcinski.files.memory.block.store.MemoryBlockStore
+import java.lang.foreign.MemorySegment
 import java.nio.ByteBuffer
 
-internal class MemoryBlockByteBuffer(
-    val segments: MemoryBlockStore,
+internal abstract class MemoryBlockByteBuffer(
+    val memorySegment: MemorySegment,
     val byteBuffer: ByteBuffer,
 ) {
     fun skipRemaining() {
@@ -31,13 +31,9 @@ internal class MemoryBlockByteBuffer(
         }
     }
 
-    fun readMeta(): Long {
-        return segments.readMeta(byteBuffer = this)
-    }
+    abstract fun readMeta(): Long
 
-    fun writeMeta(value: Long) {
-        segments.writeMeta(byteBuffer = this, value = value)
-    }
+    abstract fun writeMeta(value: Long)
 
     fun rewind(): ByteBuffer {
         return byteBuffer.rewind()
@@ -79,8 +75,7 @@ internal class MemoryBlockByteBuffer(
         return byteBuffer.getLong()
     }
 
-    fun get(dst: ByteArray, dstOffset: Int, length: Int): MemoryBlockByteBuffer {
-        val result = byteBuffer.get(dst, dstOffset, length)
-        return MemoryBlockByteBuffer(segments, result)
+    fun get(dst: ByteArray, dstOffset: Int, length: Int) {
+        byteBuffer.get(dst, dstOffset, length)
     }
 }

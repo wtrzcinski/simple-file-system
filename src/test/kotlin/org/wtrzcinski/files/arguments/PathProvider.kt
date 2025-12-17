@@ -16,14 +16,8 @@
 
 package org.wtrzcinski.files.arguments
 
-import org.wtrzcinski.files.common.Fixtures.newUniqueString
 import java.nio.file.Path
 
 interface PathProvider : AutoCloseable {
-
     fun getPath(path: String, vararg more: String): Path
-
-    fun newRandomPath(): Path {
-        return getPath(newUniqueString())
-    }
 }
