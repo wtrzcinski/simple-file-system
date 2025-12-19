@@ -16,23 +16,26 @@
 
 package org.wtrzcinski.files.memory
 
-import org.wtrzcinski.files.memory.attribute.AttributesBlock
-import org.wtrzcinski.files.memory.bitmap.BitmapRegistry
-import org.wtrzcinski.files.memory.bitmap.BitmapRegistryGroup
-import org.wtrzcinski.files.memory.block.MemoryBlock
-import org.wtrzcinski.files.memory.block.MemoryBlockRegistry
-import org.wtrzcinski.files.memory.channel.MemoryOpenOptions
-import org.wtrzcinski.files.memory.channel.MemorySeekableByteChannel
-import org.wtrzcinski.files.memory.directory.DirectoryNode
+import org.wtrzcinski.files.memory.data.MemoryDataRegistry
+import org.wtrzcinski.files.memory.data.MemoryScopeType
+import org.wtrzcinski.files.memory.data.MemorySegmentFactory
+import org.wtrzcinski.files.memory.data.block.MemoryDataBlock
+import org.wtrzcinski.files.memory.data.channel.MemoryOpenOptions
+import org.wtrzcinski.files.memory.data.channel.MemoryOpenOptions.Companion.READ
+import org.wtrzcinski.files.memory.data.channel.MemoryOpenOptions.Companion.WRITE
+import org.wtrzcinski.files.memory.data.channel.MemorySeekableByteChannel
+import org.wtrzcinski.files.memory.data.lock.MemoryFileLock.Companion.use
 import org.wtrzcinski.files.memory.exception.MemoryIllegalArgumentException
 import org.wtrzcinski.files.memory.exception.MemoryIllegalFileNameException
 import org.wtrzcinski.files.memory.exception.MemoryIllegalStateException
-import org.wtrzcinski.files.memory.lock.MemoryFileLock
-import org.wtrzcinski.files.memory.lock.MemoryFileLock.Companion.use
 import org.wtrzcinski.files.memory.node.Node
 import org.wtrzcinski.files.memory.node.NodeType
 import org.wtrzcinski.files.memory.node.RegularFileNode
 import org.wtrzcinski.files.memory.node.ValidNode
+import org.wtrzcinski.files.memory.node.attribute.AttributesBlock
+import org.wtrzcinski.files.memory.node.bitmap.BitmapRegistry
+import org.wtrzcinski.files.memory.node.bitmap.BitmapRegistryGroup
+import org.wtrzcinski.files.memory.node.directory.DirectoryNode
 import org.wtrzcinski.files.memory.ref.BlockStart
 import java.io.File
 import java.lang.foreign.MemorySegment
@@ -45,7 +48,6 @@ import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.reflect.KClass
 import kotlin.reflect.cast
 import kotlin.reflect.full.isSuperclassOf
-import kotlin.use
 
 @OptIn(ExperimentalAtomicApi::class)
 internal class MemorySegmentFileSystem(
@@ -62,8 +64,8 @@ internal class MemorySegmentFileSystem(
 
     val bitmapStore: BitmapRegistryGroup = BitmapRegistry(memoryOffset = 0L, memorySize = byteSize, readOnly = false)
 
-    val blockStore: MemoryBlockRegistry =
-        MemoryBlockRegistry(memory = memory, bitmap = bitmapStore, maxMemoryBlockByteSize = blockSize)
+    val blockStore: MemoryDataRegistry =
+        MemoryDataRegistry(memory = memory, bitmap = bitmapStore, maxMemoryBlockByteSize = blockSize)
 
     private val closed = AtomicBoolean(false)
 
@@ -108,40 +110,36 @@ internal class MemorySegmentFileSystem(
             mode = mode,
         )
 
-        var dataSegment: MemoryBlock? = null
+        var dataSegment: MemoryDataBlock? = null
 
-        val childLock: MemoryFileLock = blockStore.lock(offset = child.nodeRef)
         var dataSegmentRef: BlockStart? = readDataRef(child.nodeRef)
         if (dataSegmentRef == null) {
-            childLock.use(mode = MemoryOpenOptions.WRITE) {
-                dataSegmentRef = readDataRef(child.nodeRef)
-                if (dataSegmentRef == null) {
-                    dataSegment = blockStore.reserveSegment()
-                    updateDataRef(nodeRef = child.nodeRef, newDataRef = dataSegment)
-                    dataSegmentRef = BlockStart.of(dataSegment.start)
-                }
-            }
-        }
-        require(dataSegmentRef != null)
-
-        childLock.acquire(mode)
-        try {
-            if (dataSegment != null) {
-//                the data segment was just created
-                return dataSegment.newByteChannel(mode, childLock)
+            val childLock = blockStore.newLock(start = child.nodeRef)
+            childLock.acquire(WRITE)
+            dataSegmentRef = readDataRef(child.nodeRef)
+            if (dataSegmentRef == null) {
+                dataSegment = blockStore.reserveBlock(mode = mode)
+                updateDataRef(nodeRef = child.nodeRef, newDataRef = dataSegment)
+                return dataSegment.newByteChannel(lock = childLock)
             } else {
-//                the data segment was already present
-                dataSegment = blockStore.findSegment(dataSegmentRef)
-                val dataByteChannel = dataSegment.newByteChannel(mode, childLock)
+                dataSegment = blockStore.findBlock(mode = mode, start = dataSegmentRef)
+                val dataByteChannel = dataSegment.newByteChannel(lock = childLock)
                 if (mode.append) {
 //                    existing bytes need to be skipped
                     dataByteChannel.skipRemaining()
                 }
                 return dataByteChannel
             }
-        } catch (e: Exception) {
-            childLock.release(mode)
-            throw e
+        } else {
+            val childLock = blockStore.newLock(start = child.nodeRef)
+            childLock.acquire(mode)
+            dataSegment = blockStore.findBlock(mode = mode, start = dataSegmentRef)
+            val dataByteChannel = dataSegment.newByteChannel(lock = childLock)
+            if (mode.append) {
+//                    existing bytes need to be skipped
+                dataByteChannel.skipRemaining()
+            }
+            return dataByteChannel
         }
     }
 
@@ -165,8 +163,8 @@ internal class MemorySegmentFileSystem(
             return existingChild
         }
 
-        val parentLock = blockStore.lock(offset = parent?.nodeRef ?: BlockStart.Invalid)
-        return parentLock.use(MemoryOpenOptions.WRITE) {
+        val parentLock = blockStore.newLock(start = parent?.nodeRef ?: BlockStart.Invalid)
+        return parentLock.use(mode = WRITE) {
             val existingChild = findChildByName(parent, childName)
             if (existingChild != null) {
                 if (mode.createNew) {
@@ -179,6 +177,7 @@ internal class MemorySegmentFileSystem(
             }
             val now = java.time.Instant.now()
             val attrsRef: BlockStart = createAttrs(
+                childName = childName,
                 AttributesBlock(
                     lastAccessTime = now,
                     lastModifiedTime = now,
@@ -200,14 +199,24 @@ internal class MemorySegmentFileSystem(
         }
     }
 
-    private fun createFile(parent: DirectoryNode?, type: NodeType, childName: String, attrsRef: BlockStart): BlockStart {
-        val newChildSegment = blockStore.reserveSegment(tag = childName)
-        val newChildByteChannel = newChildSegment.newByteChannel(mode = MemoryOpenOptions.WRITE, lock = null)
+    private fun createFile(
+        parent: DirectoryNode?,
+        type: NodeType,
+        childName: String,
+        attrsRef: BlockStart
+    ): BlockStart {
+        val size = 4L + 8L + 8L + 4L + (childName.length * 2)
+        val heapBuffer = blockStore.heapBuffer(size)
+        heapBuffer.writeInt(type.ordinal)
+        heapBuffer.writeRef(BlockStart.Invalid)
+        heapBuffer.writeRef(attrsRef)
+        heapBuffer.writeString(childName)
+        heapBuffer.flip()
+
+        val newChildSegment = blockStore.reserveBlock(mode = WRITE, expectedBodySize = heapBuffer.remaining())
+        val newChildByteChannel = newChildSegment.newByteChannel(lock = null)
         newChildByteChannel.use {
-            it.writeInt(type.ordinal)
-            it.writeRef(BlockStart.Invalid)
-            it.writeRef(attrsRef)
-            it.writeString(childName)
+            it.write(heapBuffer)
         }
         val childRef = newChildByteChannel.offset()
         if (parent != null) {
@@ -217,8 +226,8 @@ internal class MemorySegmentFileSystem(
     }
 
     fun <T : Any> read(type: KClass<T>, nodeRef: BlockStart): T {
-        val segment = blockStore.findSegment(offset = nodeRef)
-        val node = segment.newByteChannel(mode = MemoryOpenOptions.READ, lock = null)
+        val block = blockStore.findBlock(mode = READ, start = nodeRef)
+        val node = block.newByteChannel(lock = null)
         node.use {
             if (type.isSuperclassOf(DirectoryNode::class) || type.isSuperclassOf(RegularFileNode::class)) {
                 val fileTypeOrdinal = node.readInt()
@@ -230,8 +239,8 @@ internal class MemorySegmentFileSystem(
                     return type.cast(
                         DirectoryNode(
                             nodeRef = nodeRef,
-                            dataRef = dataRef,
-                            attrRef = attrRef,
+                            dataRef = dataRef ?: BlockStart.Invalid,
+                            attrRef = attrRef ?: BlockStart.Invalid,
                             name = name,
                         )
                     )
@@ -239,8 +248,8 @@ internal class MemorySegmentFileSystem(
                     return type.cast(
                         RegularFileNode(
                             nodeRef = nodeRef,
-                            dataRef = dataRef,
-                            attrRef = attrRef,
+                            dataRef = dataRef ?: BlockStart.Invalid,
+                            attrRef = attrRef ?: BlockStart.Invalid,
                             name = name,
                         )
                     )
@@ -264,31 +273,31 @@ internal class MemorySegmentFileSystem(
         }
 
         require(parent is DirectoryNode)
-        val parentLock = blockStore.lock(parent.nodeRef)
-        parentLock.use(MemoryOpenOptions.WRITE) {
+        val parentLock = blockStore.newLock(parent.nodeRef)
+        parentLock.use(WRITE, spanId = "${parent.name} removeChildByName ${child.name}") {
             removeChildByName(parent, child.name)
         }
 
-        val childLock = blockStore.lock(child.nodeRef)
-        childLock.use(MemoryOpenOptions.WRITE) {
+        val childLock = blockStore.newLock(child.nodeRef)
+        childLock.use(WRITE, spanId = "${child.name} delete") {
             val dataRef = readDataRef(child.nodeRef)
             if (dataRef != null) {
-                blockStore.releaseAll(dataRef)
+                blockStore.releaseAll(mode = WRITE, dataRef)
             }
 
             val attrRef = readAttrsRef(child.nodeRef)
             if (attrRef != null) {
-                blockStore.releaseAll(attrRef)
+                blockStore.releaseAll(mode = WRITE, attrRef)
             }
 
-            blockStore.releaseAll(child.nodeRef)
+            blockStore.releaseAll(mode = WRITE, child.nodeRef)
         }
     }
 
     //    data
     private fun updateDataRef(nodeRef: BlockStart, newDataRef: BlockStart) {
-        val nodeSegment = blockStore.findSegment(nodeRef)
-        val nodeSegmentChannel = nodeSegment.newByteChannel(mode = MemoryOpenOptions.WRITE, lock = null)
+        val nodeSegment = blockStore.findBlock(mode = WRITE, start = nodeRef)
+        val nodeSegmentChannel = nodeSegment.newByteChannel(lock = null)
         nodeSegmentChannel.use {
             it.readInt()
             it.writeRef(newDataRef)
@@ -313,80 +322,79 @@ internal class MemorySegmentFileSystem(
         return readAttrs(attrsRef = attrRef)
     }
 
-    private fun createAttrs(attrs: AttributesBlock): BlockStart {
-        val attrsSegment: MemoryBlock = blockStore.reserveSegment()
-        val attrsByteChannel = attrsSegment.newByteChannel(mode = MemoryOpenOptions.WRITE, lock = null)
+    private fun createAttrs(childName: String, attrs: AttributesBlock): BlockStart {
+        val expectedSize = 12L * 3 + 4L + 9L + 4L + (attrs.owner.length * 2) + 4L + (attrs.group.length * 2)
+        val heapBuffer = blockStore.heapBuffer(expectedSize)
+        heapBuffer.writeInstant(attrs.lastAccessTime)
+        heapBuffer.writeInstant(attrs.lastModifiedTime)
+        heapBuffer.writeInstant(attrs.creationTime)
+        heapBuffer.writeString(PosixFilePermissions.toString(attrs.permissions))
+        heapBuffer.writeString(attrs.owner)
+        heapBuffer.writeString(attrs.group)
+        heapBuffer.flip()
+
+        val attrsSegment: MemoryDataBlock = blockStore.reserveBlock(mode = WRITE, expectedBodySize = heapBuffer.remaining(), spanId = "attrs $childName")
+        val attrsByteChannel = attrsSegment.newByteChannel(lock = null)
         attrsByteChannel.use {
-            it.writeInstant(attrs.lastAccessTime)
-            it.writeInstant(attrs.lastModifiedTime)
-            it.writeInstant(attrs.creationTime)
-            it.writeString(PosixFilePermissions.toString(attrs.permissions))
-            it.writeString(attrs.owner)
-            it.writeString(attrs.group)
+            it.write(other = heapBuffer)
         }
         return attrsSegment
     }
 
-    fun updateFileTime(nodeRef: BlockStart, attrs: AttributesBlock) {
-        blockStore.lock(nodeRef).use(MemoryOpenOptions.WRITE) {
-            val attrsRef = readAttrsRef(nodeRef)
+    fun updateFileTime(start: BlockStart, attrs: AttributesBlock) {
+        blockStore.newLock(start = start).use(WRITE) {
+            val attrsRef = readAttrsRef(start)
             require(attrsRef != null)
-            val attrsSegment = blockStore.findSegment(attrsRef)
-            attrsSegment.use {
-                val attrsByteChannel = attrsSegment.newByteChannel(mode = MemoryOpenOptions.WRITE, lock = null)
-                attrsByteChannel.use {
-                    it.writeInstant(attrs.lastAccessTime)
-                    it.writeInstant(attrs.lastModifiedTime)
-                    it.readInstant()
-                    it.skipRemaining()
-                }
+            val attrsSegment = blockStore.findBlock(mode = WRITE, start = attrsRef)
+            val attrsByteChannel = attrsSegment.newByteChannel(lock = null)
+            attrsByteChannel.use {
+                it.writeInstant(attrs.lastAccessTime)
+                it.writeInstant(attrs.lastModifiedTime)
+                it.readInstant()
+                it.skipRemaining()
             }
         }
     }
 
     fun updatePermissions(nodeRef: BlockStart, attrs: AttributesBlock) {
-        blockStore.lock(nodeRef).use(MemoryOpenOptions.WRITE) {
+        blockStore.newLock(nodeRef).use(mode = WRITE) {
             val attrsRef = readAttrsRef(nodeRef)
             require(attrsRef != null)
-            val attrsSegment = blockStore.findSegment(attrsRef)
-            attrsSegment.use {
-                val attrsByteChannel = attrsSegment.newByteChannel(mode = MemoryOpenOptions.WRITE, lock = null)
-                attrsByteChannel.use {
-                    it.readInstant()
-                    it.readInstant()
-                    it.readInstant()
-                    it.writeString(PosixFilePermissions.toString(attrs.permissions))
-                    it.skipRemaining()
-                }
+            val attrsSegment = blockStore.findBlock(mode = WRITE, start = attrsRef)
+            val attrsByteChannel = attrsSegment.newByteChannel(lock = null)
+            attrsByteChannel.use {
+                it.readInstant()
+                it.readInstant()
+                it.readInstant()
+                it.writeString(PosixFilePermissions.toString(attrs.permissions))
+                it.skipRemaining()
             }
         }
     }
 
     private fun readAttrs(attrsRef: BlockStart): AttributesBlock {
-        val attrsNode = blockStore.findSegment(attrsRef)
-        attrsNode.use {
-            val attrsByteChannel = attrsNode.newByteChannel(mode = MemoryOpenOptions.READ, lock = null)
-            attrsByteChannel.use {
-                val accessed = it.readInstant()
-                val modified = it.readInstant()
-                val created = it.readInstant()
-                val permissions = it.readString()
-                val owner = it.readString()
-                val group = it.readString()
-                return AttributesBlock(
-                    lastAccessTime = accessed,
-                    lastModifiedTime = modified,
-                    creationTime = created,
-                    permissions = PosixFilePermissions.fromString(permissions),
-                    owner = owner,
-                    group = group,
-                )
-            }
+        val attrsNode = blockStore.findBlock(mode = READ, start = attrsRef)
+        val attrsByteChannel = attrsNode.newByteChannel(lock = null)
+        attrsByteChannel.use {
+            val accessed = it.readInstant()
+            val modified = it.readInstant()
+            val created = it.readInstant()
+            val permissions = it.readString()
+            val owner = it.readString()
+            val group = it.readString()
+            return AttributesBlock(
+                lastAccessTime = accessed,
+                lastModifiedTime = modified,
+                creationTime = created,
+                permissions = PosixFilePermissions.fromString(permissions),
+                owner = owner,
+                group = group,
+            )
         }
     }
 
-    private fun readAttrsRef(nodeRef: BlockStart): BlockStart? {
-        val read = read(type = ValidNode::class, nodeRef = nodeRef)
+    private fun readAttrsRef(start: BlockStart): BlockStart? {
+        val read = read(type = ValidNode::class, nodeRef = start)
         val attrRef = read.attrsRef
         return if (attrRef.isValid()) {
             attrRef
@@ -419,13 +427,11 @@ internal class MemorySegmentFileSystem(
     }
 
     private fun addChild(parent: DirectoryNode, childRef: BlockStart) {
-        val children: Sequence<BlockStart> = readChildIds(parent) + childRef
-        upsertChildren(nodeRef = parent.nodeRef, prevDataRef = parent.dataRef, children = children)
-    }
+        blockStore.newLock(parent.nodeRef).use(spanId = "${parent.nodeRef.start} addChild ${childRef.start}") {
+            val children: Sequence<BlockStart> = readChildIds(parent) + childRef
 
-    private fun readChildIds(parent: DirectoryNode): Sequence<BlockStart> {
-        val dataRef = readDataRef(parent.nodeRef) ?: return sequenceOf()
-        return readChildIds(dataRef)
+            upsertChildren(nodeRef = parent.nodeRef, prevDataRef = parent.dataRef, children = children)
+        }
     }
 
     private fun removeChildByName(parent: DirectoryNode, name: String) {
@@ -439,19 +445,29 @@ internal class MemorySegmentFileSystem(
         upsertChildren(nodeRef = parent.nodeRef, prevDataRef = parent.dataRef, children = children.asSequence())
     }
 
+    private fun readChildIds(parent: DirectoryNode): Sequence<BlockStart> {
+        val dataRef = readDataRef(parent.nodeRef) ?: return sequenceOf()
+        return readChildIds(dataRef)
+    }
+
     private fun upsertChildren(nodeRef: BlockStart, prevDataRef: BlockStart, children: Sequence<BlockStart>) {
         if (prevDataRef.isValid()) {
-            val oldDataSegment = blockStore.findSegment(prevDataRef)
-            oldDataSegment.use {
-                blockStore.releaseAll(oldDataSegment)
-            }
+            val oldDataSegment = blockStore.findBlock(mode = WRITE, start = prevDataRef)
+            blockStore.releaseAll(oldDataSegment)
         }
 
-        val newDataRef = if (children.count() > 0) {
-            val newDataSegment: MemoryBlock = blockStore.reserveSegment()
-            val newDataByteChannel = newDataSegment.newByteChannel(mode = MemoryOpenOptions.WRITE, lock = null)
+        val childrenCount = children.count()
+        val newDataRef = if (childrenCount > 0) {
+//            val heapBuffer = blockStore.heapBuffer(size = 4L + (8L * childrenCount))
+//            heapBuffer.writeRefs(children)
+//            heapBuffer.flip()
+//            val maxExpectedBodySize = heapBuffer.remaining().toLong()
+
+            val newDataSegment: MemoryDataBlock = blockStore.reserveBlock(mode = WRITE, spanId = "${nodeRef.start} children")
+            val newDataByteChannel = newDataSegment.newByteChannel(lock = null)
             newDataByteChannel.use {
                 it.writeRefs(children)
+//                it.write(heapBuffer)
             }
             newDataSegment
         } else {
@@ -460,13 +476,11 @@ internal class MemorySegmentFileSystem(
         updateDataRef(nodeRef, newDataRef)
     }
 
-    private fun readChildIds(dataRef: BlockStart): Sequence<BlockStart> {
-        val dataNode = blockStore.findSegment(dataRef)
-        dataNode.use {
-            val dataByteChannel = dataNode.newByteChannel(mode = MemoryOpenOptions.READ, lock = null)
-            dataByteChannel.use {
-                return it.readRefs()
-            }
+    private fun readChildIds(start: BlockStart): Sequence<BlockStart> {
+        val dataNode = blockStore.findBlock(mode = READ, start = start)
+        val childrenByteChannel = dataNode.newByteChannel(lock = null)
+        childrenByteChannel.use {
+            return it.readRefs()
         }
     }
 }

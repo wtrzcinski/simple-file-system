@@ -14,25 +14,11 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.ref
+package org.wtrzcinski.files.memory.data
 
-class DefaultBlockStart(override val start: Long) : BlockStart {
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.SegmentAllocator
 
-    override fun toString(): String {
-        return "${javaClass.simpleName}(start=$start)"
-    }
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) {
-            return true
-        }
-        if (other !is BlockStart) {
-            return false
-        }
-        return start == other.start
-    }
-
-    override fun hashCode(): Int {
-        return start.hashCode()
-    }
+interface MemorySegmentFactory : AutoCloseable, SegmentAllocator {
+    override fun allocate(byteSize: Long, byteAlignmen: Long): MemorySegment
 }

@@ -21,6 +21,10 @@ open class DefaultBlock(
     override val size: Long,
     override val end: Long = start + size,
 ) : Block {
+    override fun toString(): String {
+        return "${javaClass.simpleName}(start=$start, size=$size, end=$end)"
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

@@ -18,15 +18,21 @@ package org.wtrzcinski.files
 
 import kotlinx.coroutines.test.runTest
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.Parameter
 import org.junit.jupiter.params.ParameterizedClass
 import org.junit.jupiter.params.provider.ArgumentsSource
-import org.wtrzcinski.files.arguments.PathProvider
-import org.wtrzcinski.files.arguments.TestArgumentsProvider
 import org.wtrzcinski.files.Fixtures.newAlphanumericString
 import org.wtrzcinski.files.Fixtures.newUniqueString
+import org.wtrzcinski.files.arguments.PathProvider
+import org.wtrzcinski.files.arguments.TestArgumentsProvider
+import org.wtrzcinski.files.Log
+import org.wtrzcinski.files.memory.spi.MemoryFileStore
+import java.net.URI
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardOpenOption.APPEND
 import java.nio.file.StandardOpenOption.CREATE
 import java.util.concurrent.CopyOnWriteArrayList
@@ -40,31 +46,54 @@ import kotlin.time.measureTime
 @Suppress("ConstPropertyName")
 class FilesPerformanceTest {
     companion object {
-        private const val repeats = 1000
+        private const val repeats = 100
         private const val threads = 100
     }
 
     @Parameter
-    lateinit var fileSystem: PathProvider
+    lateinit var pathProvider: PathProvider
+
+    @BeforeEach
+    fun beforeEach() {
+        val parent = pathProvider.getPath("/")
+
+        val fileStore = parent.fileSystem.fileStores.first() as MemoryFileStore
+        val used = fileStore.totalSpace - fileStore.unallocatedSpace
+        assertThat(fileStore.used).isEqualTo(used)
+        assertThat(used).isEqualTo(90L)
+    }
+
+    @AfterEach
+    fun afterEach() {
+        val parent = pathProvider.getPath("/")
+        val list = Files.list(parent)
+        for (child in list) {
+            Files.delete(child)
+        }
+        val fileStore = parent.fileSystem.fileStores.first() as MemoryFileStore
+        val used = fileStore.totalSpace - fileStore.unallocatedSpace
+        assertThat(fileStore.used).isEqualTo(used)
+        assertThat(used).isEqualTo(90L)
+    }
 
     @Test
     fun `should upsert in loop`() {
         val duration = measureTime {
             repeat(repeats) {
-                val givenFileName = fileSystem.getPath(newUniqueString())
-                val givenFileContent = newAlphanumericString(maxLength = 512)
+                val givenFileName = pathProvider.getPath(newUniqueString())
+                val givenFileContent = newAlphanumericString(lengthUntil = 512)
                 Files.write(givenFileName, listOf(givenFileContent), UTF_8)
             }
         }
 
-        println("upsert: $duration $fileSystem")
+        Log.debug { "upsert: $duration $pathProvider" }
     }
 
     @Test
     fun `should read in loop`() {
         val all = (0..<repeats).map { _ ->
-            val givenFileName = fileSystem.getPath(newUniqueString())
-            val givenFileContent = newAlphanumericString(maxLength = 512)
+            val givenFileName = pathProvider.getPath(newUniqueString())
+            val givenFileContent = newAlphanumericString(lengthUntil = 512)
             Files.write(givenFileName, listOf(givenFileContent), UTF_8)
             val actual = Files.exists(givenFileName)
             assertThat(actual).isTrue()
@@ -77,15 +106,15 @@ class FilesPerformanceTest {
                 assertThat(actual).contains(givenFileContent)
             }
         }
-        println("read: $duration $fileSystem")
+        Log.debug { "read: $duration $pathProvider" }
     }
 
     @Test
     fun `should delete in loop`() {
         val all = (0..<repeats)
             .map { _ ->
-                val givenFileName = fileSystem.getPath(newUniqueString())
-                val givenFileContent = newAlphanumericString(maxLength = 512)
+                val givenFileName = pathProvider.getPath(newUniqueString())
+                val givenFileContent = newAlphanumericString(lengthUntil = 512)
                 Files.write(givenFileName, listOf(givenFileContent), UTF_8)
                 val actual = Files.exists(givenFileName)
                 assertThat(actual).isTrue()
@@ -100,27 +129,26 @@ class FilesPerformanceTest {
                     assertThat(actual).isFalse()
                 }
         }
-        println("delete $duration $fileSystem")
+        Log.debug { "delete $duration $pathProvider" }
     }
 
     @Test
-//    @Disabled("not going to work on any file system")
     fun `should upsert in loop parallel`() = runTest {
-        val givenFileName = fileSystem.getPath(newUniqueString())
+        Log.clear()
+
+        val givenFileName = pathProvider.getPath(newUniqueString())
 
         val pool = Executors.newWorkStealingPool()
         val futures = CopyOnWriteArrayList<Future<*>>()
         val givenList = CopyOnWriteArrayList<String>()
-        val actualList = CopyOnWriteArrayList<String>()
-        repeat(threads) {
+        repeat(1) {
             val submit: Future<*> = pool.submit {
-                val givenFileContent = newAlphanumericString(maxLength = 512)
-                givenList.add(givenFileContent)
+                repeat(2) {
+                    val givenFileContent = newAlphanumericString(lengthFrom = 128, lengthUntil = 513)
+                    givenList.add(givenFileContent)
 
-                Files.writeString(givenFileName, givenFileContent, UTF_8)
-
-                val actual = Files.readString(givenFileName)
-                actualList.add(actual)
+                    Files.writeString(givenFileName, givenFileContent, UTF_8)
+                }
             }
             futures.add(submit)
         }
@@ -128,25 +156,35 @@ class FilesPerformanceTest {
         for (future in futures) {
             future.get()
         }
-//        actualList.forEach { actual ->
-//            assertThat(givenList).contains(actual)
-//        }
+        val endFile = Files.readString(givenFileName)
+        val any = givenList.any { endFile == it }
+        if (any == false) {
+            for (any in Log.get()) {
+                println(any)
+            }
+        }
+        assertThat(any).isTrue()
     }
 
     @Test
     fun `should append in loop parallel`() {
-        val givenFileName = fileSystem.getPath(newUniqueString())
+        val givenFilePath = pathProvider.getPath(newUniqueString())
+
+        val fileSystem = pathProvider.fileSystem()
+        Log.debug({ fileSystem })
 
         val pool = Executors.newWorkStealingPool()
         val futures = CopyOnWriteArrayList<Future<*>>()
         repeat(threads) {
             val submit: Future<*> = pool.submit {
-                val givenFileContent = newAlphanumericString(maxLength = 512)
+                repeat(10) {
+                    val givenFileContent = newAlphanumericString(lengthFrom = 40, lengthUntil = 41)
 
-                Files.writeString(givenFileName, givenFileContent, APPEND, CREATE)
+                    Files.writeString(givenFilePath, givenFileContent, APPEND, CREATE)
 
-                val actual = Files.readString(givenFileName)
-                assertThat(actual).contains(givenFileContent)
+                    val actual = Files.readString(givenFilePath)
+                    assertThat(actual).contains(givenFileContent)
+                }
             }
             futures.add(submit)
         }

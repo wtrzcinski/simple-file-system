@@ -16,14 +16,19 @@
 
 package org.wtrzcinski.files.arguments
 
+import java.nio.file.FileSystem
 import java.nio.file.Path
 
 class SubpathPathProvider(
     private val directory: Path
 ) : PathProvider {
 
+    override fun fileSystem(): FileSystem {
+        return directory.fileSystem
+    }
+
     override fun getPath(path: String, vararg more: String): Path {
-        val other = directory.fileSystem.getPath(path, *more)
+        val other = fileSystem().getPath(path, *more)
         val resolve = directory.resolve(other)
         return resolve
     }

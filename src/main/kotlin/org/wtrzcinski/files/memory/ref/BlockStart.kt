@@ -16,13 +16,13 @@
 
 package org.wtrzcinski.files.memory.ref
 
-import org.wtrzcinski.files.memory.byteBuffer.MemoryBlockByteBuffer.Companion.invalidRef
+import org.wtrzcinski.files.memory.data.byteBuffer.MemoryByteBuffer.Companion.InvalidRef
 
 interface BlockStart : Comparable<BlockStart> {
     val start: Long
 
     fun isValid(): Boolean {
-        return start != invalidRef
+        return start != InvalidRef
     }
 
     override fun compareTo(other: BlockStart): Int {
@@ -37,10 +37,10 @@ interface BlockStart : Comparable<BlockStart> {
     }
 
     companion object {
-        val Invalid: BlockStart = DefaultBlockStart(start = invalidRef)
+        val Invalid: BlockStart = DefaultBlockStart(start = InvalidRef)
 
-        fun of(offset: Long): BlockStart {
-            if (offset == invalidRef) {
+        operator fun invoke(offset: Long): BlockStart {
+            if (offset == InvalidRef) {
                 return Invalid
             }
             return DefaultBlockStart(offset)

@@ -16,8 +16,11 @@
 
 package org.wtrzcinski.files.arguments
 
+import java.nio.file.FileSystem
 import java.nio.file.Path
 
 interface PathProvider : AutoCloseable {
     fun getPath(path: String, vararg more: String): Path
+
+    fun fileSystem(): FileSystem
 }

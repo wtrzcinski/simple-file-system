@@ -14,25 +14,17 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.ref
+package org.wtrzcinski.files.memory.data
 
-class DefaultBlockStart(override val start: Long) : BlockStart {
+import org.wtrzcinski.files.memory.ref.BlockStart
 
-    override fun toString(): String {
-        return "${javaClass.simpleName}(start=$start)"
-    }
+interface MemoryData {
 
-    override fun equals(other: Any?): Boolean {
-        if (this === other) {
-            return true
-        }
-        if (other !is BlockStart) {
-            return false
-        }
-        return start == other.start
-    }
+    fun readRef(): BlockStart?
 
-    override fun hashCode(): Int {
-        return start.hashCode()
-    }
+    fun readLong(): Long
+
+    fun writeRef(ref: BlockStart)
+
+    fun next(spanId: Any?): Boolean
 }

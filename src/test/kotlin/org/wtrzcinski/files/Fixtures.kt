@@ -43,10 +43,10 @@ object Fixtures {
         return directory
     }
 
-    fun newAlphanumericString(minLength: Int = 1, maxLength: Int): String {
-        require(minLength < maxLength)
+    fun newAlphanumericString(lengthFrom: Int = 1, lengthUntil: Int): String {
+        require(lengthFrom < lengthUntil)
 
-        val length: Int = Random.nextInt(minLength, maxLength)
+        val length: Int = Random.nextInt(lengthFrom, lengthUntil)
         val chars: List<Char> = (0..<length)
             .map { Random.nextInt(alphanumeric.size) }
             .map { alphanumeric[it] }

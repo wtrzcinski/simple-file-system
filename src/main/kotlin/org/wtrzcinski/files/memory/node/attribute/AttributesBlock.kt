@@ -14,25 +14,17 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.ref
+package org.wtrzcinski.files.memory.node.attribute
 
-class DefaultBlockStart(override val start: Long) : BlockStart {
+import java.nio.file.attribute.PosixFilePermission
+import java.nio.file.attribute.PosixFilePermissions
+import java.time.Instant
 
-    override fun toString(): String {
-        return "${javaClass.simpleName}(start=$start)"
-    }
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) {
-            return true
-        }
-        if (other !is BlockStart) {
-            return false
-        }
-        return start == other.start
-    }
-
-    override fun hashCode(): Int {
-        return start.hashCode()
-    }
-}
+class AttributesBlock(
+    val lastAccessTime: Instant = Instant.ofEpochSecond(0, 0),
+    val lastModifiedTime: Instant = Instant.ofEpochSecond(0, 0),
+    val creationTime: Instant = Instant.ofEpochSecond(0, 0),
+    val permissions: Set<PosixFilePermission> = PosixFilePermissions.fromString("rwx".repeat(3)),
+    val owner: String = "",
+    val group: String = "",
+)

@@ -26,23 +26,6 @@ class DeleteOnClosePathProvider(
     private val file: Path? = null,
     private val fileSystem: FileSystem? = null,
 ) : PathProvider by delegate {
-
-    override fun close() {
-        try {
-            delegate.close()
-        } finally {
-            try {
-                file?.deleteRecursively()
-            } finally {
-                fileSystem?.close()
-            }
-        }
-    }
-
-    override fun toString(): String {
-        return "${javaClass.simpleName}(file=$file, fileSystem=$fileSystem, delegate=$delegate)"
-    }
-
     companion object {
         private fun Path.deleteRecursively() {
             if (this.isDirectory()) {
@@ -52,5 +35,19 @@ class DeleteOnClosePathProvider(
             }
             Files.delete(this)
         }
+    }
+
+    override fun close() {
+        try {
+            delegate.close()
+        } finally {
+            fileSystem.use {
+                file?.deleteRecursively()
+            }
+        }
+    }
+
+    override fun toString(): String {
+        return "${javaClass.simpleName}(file=$file, fileSystem=$fileSystem, delegate=$delegate)"
     }
 }

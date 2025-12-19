@@ -14,25 +14,13 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.ref
+package org.wtrzcinski.files.memory.node.data
 
-class DefaultBlockStart(override val start: Long) : BlockStart {
+import org.wtrzcinski.files.memory.ref.BlockStart
 
-    override fun toString(): String {
-        return "${javaClass.simpleName}(start=$start)"
-    }
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) {
-            return true
-        }
-        if (other !is BlockStart) {
-            return false
-        }
-        return start == other.start
-    }
-
-    override fun hashCode(): Int {
-        return start.hashCode()
-    }
-}
+// attributes, children, raw data
+class DataBlock(
+    val bodySize: Long = 0,
+    val nextRef: BlockStart,
+    val blockCount: Long = 0,
+)

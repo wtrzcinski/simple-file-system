@@ -31,7 +31,7 @@ class FilesReadmeTest {
         val givenFileSystem = FileSystems.newFileSystem(URI.create("jsmsfs:///"), givenEnv)
         val givenDirectoryPath = givenFileSystem.getPath("directory")
         val givenFilePath = givenDirectoryPath.resolve("file.txt")
-        val givenFileContent = newAlphanumericString(minLength = 1024, maxLength = 1024 * 4)
+        val givenFileContent = newAlphanumericString(lengthFrom = 1024, lengthUntil = 1024 * 4)
 
         Files.createDirectory(givenDirectoryPath)
         Files.writeString(givenFilePath, givenFileContent, Charsets.UTF_16)

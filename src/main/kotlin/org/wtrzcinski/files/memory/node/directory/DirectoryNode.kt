@@ -14,25 +14,21 @@
  * limitations under the License.
  */
 
-package org.wtrzcinski.files.memory.ref
+package org.wtrzcinski.files.memory.node.directory
 
-class DefaultBlockStart(override val start: Long) : BlockStart {
+import org.wtrzcinski.files.memory.node.NodeType
+import org.wtrzcinski.files.memory.node.ValidNode
+import org.wtrzcinski.files.memory.ref.BlockStart
 
-    override fun toString(): String {
-        return "${javaClass.simpleName}(start=$start)"
-    }
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) {
-            return true
-        }
-        if (other !is BlockStart) {
-            return false
-        }
-        return start == other.start
-    }
-
-    override fun hashCode(): Int {
-        return start.hashCode()
-    }
-}
+internal class DirectoryNode(
+    name: String,
+    nodeRef: BlockStart,
+    dataRef: BlockStart = BlockStart.Invalid,
+    attrRef: BlockStart = BlockStart.Invalid,
+) : ValidNode(
+    nodeRef = nodeRef,
+    fileType = NodeType.Directory,
+    dataRef = dataRef,
+    attrsRef = attrRef,
+    name = name,
+)

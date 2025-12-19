@@ -16,6 +16,4 @@
 
 package org.wtrzcinski.files.memory.exception
 
-class MemoryIllegalStateException(message: String?) : IllegalStateException(message) {
-    constructor() : this(null)
-}
+class MemoryIllegalStateException(message: String? = null) : IllegalStateException(message)

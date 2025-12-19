@@ -16,12 +16,15 @@
 
 package org.wtrzcinski.files.memory.ref
 
-import org.wtrzcinski.files.memory.bitmap.BitmapEntry
+import org.wtrzcinski.files.memory.node.bitmap.BitmapEntry
+import org.wtrzcinski.files.memory.data.byteBuffer.MemoryByteBuffer.Companion.InvalidRef
 import org.wtrzcinski.files.memory.exception.MemoryIllegalArgumentException
 
 interface Block : BlockStart, BlockSize {
 
     companion object {
+        val InvalidBlock = DefaultBlock(start = InvalidRef, size = InvalidRef)
+
         fun of(byteOffset: Long, byteSize: Long): DefaultBlock {
             return DefaultBlock(start = byteOffset, size = byteSize)
         }

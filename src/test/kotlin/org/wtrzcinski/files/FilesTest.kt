@@ -26,7 +26,7 @@ import org.wtrzcinski.files.arguments.TestArgumentsProvider
 import org.wtrzcinski.files.Fixtures.newAlphanumericString
 import org.wtrzcinski.files.Fixtures.newRandomPath
 import org.wtrzcinski.files.Fixtures.newUniqueString
-import org.wtrzcinski.files.memory.spi.SimpleMemoryFileStore
+import org.wtrzcinski.files.memory.spi.MemoryFileStore
 import java.nio.file.Files
 import java.nio.file.StandardOpenOption
 import kotlin.io.path.createParentDirectories
@@ -50,9 +50,9 @@ class FilesTest {
 
     @Test
     fun `should read file`() {
-        val givenDirectoryPath = pathProvider.getPath(newAlphanumericString(maxLength = 10))
-        val givenFilePath = givenDirectoryPath.resolve(newAlphanumericString(maxLength = 10))
-        val givenFileContent = newAlphanumericString(maxLength = 512)
+        val givenDirectoryPath = pathProvider.getPath(newAlphanumericString(lengthUntil = 10))
+        val givenFilePath = givenDirectoryPath.resolve(newAlphanumericString(lengthUntil = 10))
+        val givenFileContent = newAlphanumericString(lengthUntil = 512)
 
         Files.createDirectory(givenDirectoryPath)
         Files.writeString(givenFilePath, givenFileContent, Charsets.UTF_8)
@@ -77,7 +77,7 @@ class FilesTest {
     @Test
     fun `should delete all files`() {
         val givenRoot = pathProvider.getPath("/")
-        val givenFileStore = givenRoot.fileSystem.provider().getFileStore(givenRoot) as SimpleMemoryFileStore
+        val givenFileStore = givenRoot.fileSystem.provider().getFileStore(givenRoot) as MemoryFileStore
         val givenFile1 = givenRoot.resolve("file1-file1-file1")
         val givenFile2 = givenRoot.resolve("file2-file2-file2")
         val givenFile3 = givenRoot.resolve("file3-file3-file3")
@@ -160,7 +160,7 @@ class FilesTest {
     @Test
     fun `should open new input stream`() {
         val givenFilePath = pathProvider.newRandomPath()
-        val givenFileContent = newAlphanumericString(maxLength = 1024 * 10)
+        val givenFileContent = newAlphanumericString(lengthUntil = 1024 * 10)
         Files.writeString(givenFilePath, givenFileContent)
 
         val actualStream = Files.newInputStream(givenFilePath)
@@ -174,7 +174,7 @@ class FilesTest {
     @Test
     fun `should open input stream`() {
         val givenFilePath = pathProvider.newRandomPath()
-        val givenFileContent = newAlphanumericString(maxLength = 1024 * 10)
+        val givenFileContent = newAlphanumericString(lengthUntil = 1024 * 10)
 
         val outputStream = Files.newOutputStream(givenFilePath)
         outputStream.use {

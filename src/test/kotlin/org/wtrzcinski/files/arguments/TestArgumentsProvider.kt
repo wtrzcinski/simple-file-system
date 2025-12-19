@@ -21,7 +21,7 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.support.ParameterDeclarations
 import org.wtrzcinski.files.Fixtures
-import org.wtrzcinski.files.memory.MemoryScopeType
+import org.wtrzcinski.files.memory.data.MemoryScopeType
 import java.net.URI
 import java.nio.file.FileSystems
 import java.nio.file.Files
@@ -30,7 +30,7 @@ import java.util.stream.Stream
 class TestArgumentsProvider : ArgumentsProvider {
     override fun provideArguments(parameters: ParameterDeclarations, context: ExtensionContext): Stream<out Arguments> {
         val capacity = 1024 * 1024 * 4
-        val blockSize = 256
+        val blockSize = 32
 
         val tempFile = Files.createTempFile("jsmsfs", ".txt")
         return MemoryScopeType

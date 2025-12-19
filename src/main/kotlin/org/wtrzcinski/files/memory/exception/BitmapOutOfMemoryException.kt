@@ -16,4 +16,4 @@
 
 package org.wtrzcinski.files.memory.exception
 
-class BitmapOutOfMemoryException : RuntimeException()
+class BitmapOutOfMemoryException(message: String? = null) : RuntimeException(message)
