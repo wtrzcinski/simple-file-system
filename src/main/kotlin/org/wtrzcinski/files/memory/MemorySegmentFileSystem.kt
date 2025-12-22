@@ -43,6 +43,7 @@ import java.nio.file.DirectoryNotEmptyException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.NoSuchFileException
 import java.nio.file.attribute.PosixFilePermissions
+import java.nio.file.attribute.PosixFilePermissions.toString
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.reflect.KClass
@@ -175,54 +176,55 @@ internal class MemorySegmentFileSystem(
             if (!mode.create) {
                 throw NoSuchFileException(childName)
             }
+
+            val fileBuffer = blockStore.heapBuffer(4L + 8L + 8L + 4L + (childName.length * 2))
+            fileBuffer.writeInt(childType.ordinal)
+            fileBuffer.writeRef(BlockStart.Invalid)
+            fileBuffer.writeRef(BlockStart.Invalid)
+            fileBuffer.writeString(value = childName)
+            fileBuffer.flip()
+
             val now = java.time.Instant.now()
-            val attrsRef: BlockStart = createAttrs(
-                childName = childName,
-                AttributesBlock(
-                    lastAccessTime = now,
-                    lastModifiedTime = now,
-                    creationTime = now,
-                )
-            )
-            val childRef = createFile(
-                parent = parent,
-                type = childType,
-                childName = childName,
-                attrsRef = attrsRef,
-            )
+            val attrs = AttributesBlock(lastAccessTime = now, lastModifiedTime = now, creationTime = now)
+            val attrsBuffer = blockStore.heapBuffer(12L * 3 + 4L + 9L + 4L + (attrs.owner.length * 2) + 4L + (attrs.group.length * 2))
+            attrsBuffer.writeInstant(attrs.lastAccessTime)
+            attrsBuffer.writeInstant(attrs.lastModifiedTime)
+            attrsBuffer.writeInstant(attrs.creationTime)
+            attrsBuffer.writeString(toString(attrs.permissions))
+            attrsBuffer.writeString(attrs.owner)
+            attrsBuffer.writeString(attrs.group)
+            attrsBuffer.flip()
+
+            val newChildBlock = blockStore.reserveBlock(mode = WRITE, expectedBodySize = fileBuffer.remaining())
+
+            val attrsBlock: MemoryDataBlock = blockStore.reserveBlock(mode = WRITE, expectedBodySize = attrsBuffer.remaining())
+            val attrsByteChannel = attrsBlock.newByteChannel()
+            attrsByteChannel.use {
+                it.write(other = attrsBuffer)
+            }
+
+            fileBuffer.readInt()
+            fileBuffer.readRef()
+            fileBuffer.writeRef(attrsBlock)
+            fileBuffer.skipRemaining()
+            fileBuffer.flip()
+            val newChildByteChannel = newChildBlock.newByteChannel()
+            newChildByteChannel.use {
+                it.write(fileBuffer)
+            }
+
+            val childRef = newChildByteChannel.offset()
+            if (parent != null) {
+                addChild(parent = parent, childRef = childRef)
+            }
+
             return@use ValidNode(
                 nodeRef = childRef,
                 fileType = childType,
                 name = childName,
-                attrsRef = attrsRef,
+                attrsRef = attrsBlock,
             )
         }
-    }
-
-    private fun createFile(
-        parent: DirectoryNode?,
-        type: NodeType,
-        childName: String,
-        attrsRef: BlockStart
-    ): BlockStart {
-        val size = 4L + 8L + 8L + 4L + (childName.length * 2)
-        val heapBuffer = blockStore.heapBuffer(size)
-        heapBuffer.writeInt(type.ordinal)
-        heapBuffer.writeRef(BlockStart.Invalid)
-        heapBuffer.writeRef(attrsRef)
-        heapBuffer.writeString(childName)
-        heapBuffer.flip()
-
-        val newChildSegment = blockStore.reserveBlock(mode = WRITE, expectedBodySize = heapBuffer.remaining())
-        val newChildByteChannel = newChildSegment.newByteChannel(lock = null)
-        newChildByteChannel.use {
-            it.write(heapBuffer)
-        }
-        val childRef = newChildByteChannel.offset()
-        if (parent != null) {
-            addChild(parent, childRef)
-        }
-        return childRef
     }
 
     fun <T : Any> read(type: KClass<T>, nodeRef: BlockStart): T {
@@ -274,12 +276,12 @@ internal class MemorySegmentFileSystem(
 
         require(parent is DirectoryNode)
         val parentLock = blockStore.newLock(parent.nodeRef)
-        parentLock.use(WRITE, spanId = "${parent.name} removeChildByName ${child.name}") {
+        parentLock.use(WRITE) {
             removeChildByName(parent, child.name)
         }
 
         val childLock = blockStore.newLock(child.nodeRef)
-        childLock.use(WRITE, spanId = "${child.name} delete") {
+        childLock.use(WRITE) {
             val dataRef = readDataRef(child.nodeRef)
             if (dataRef != null) {
                 blockStore.releaseAll(mode = WRITE, dataRef)
@@ -322,25 +324,6 @@ internal class MemorySegmentFileSystem(
         return readAttrs(attrsRef = attrRef)
     }
 
-    private fun createAttrs(childName: String, attrs: AttributesBlock): BlockStart {
-        val expectedSize = 12L * 3 + 4L + 9L + 4L + (attrs.owner.length * 2) + 4L + (attrs.group.length * 2)
-        val heapBuffer = blockStore.heapBuffer(expectedSize)
-        heapBuffer.writeInstant(attrs.lastAccessTime)
-        heapBuffer.writeInstant(attrs.lastModifiedTime)
-        heapBuffer.writeInstant(attrs.creationTime)
-        heapBuffer.writeString(PosixFilePermissions.toString(attrs.permissions))
-        heapBuffer.writeString(attrs.owner)
-        heapBuffer.writeString(attrs.group)
-        heapBuffer.flip()
-
-        val attrsSegment: MemoryDataBlock = blockStore.reserveBlock(mode = WRITE, expectedBodySize = heapBuffer.remaining(), spanId = "attrs $childName")
-        val attrsByteChannel = attrsSegment.newByteChannel(lock = null)
-        attrsByteChannel.use {
-            it.write(other = heapBuffer)
-        }
-        return attrsSegment
-    }
-
     fun updateFileTime(start: BlockStart, attrs: AttributesBlock) {
         blockStore.newLock(start = start).use(WRITE) {
             val attrsRef = readAttrsRef(start)
@@ -350,7 +333,6 @@ internal class MemorySegmentFileSystem(
             attrsByteChannel.use {
                 it.writeInstant(attrs.lastAccessTime)
                 it.writeInstant(attrs.lastModifiedTime)
-                it.readInstant()
                 it.skipRemaining()
             }
         }
@@ -427,7 +409,7 @@ internal class MemorySegmentFileSystem(
     }
 
     private fun addChild(parent: DirectoryNode, childRef: BlockStart) {
-        blockStore.newLock(parent.nodeRef).use(spanId = "${parent.nodeRef.start} addChild ${childRef.start}") {
+        blockStore.newLock(parent.nodeRef).use {
             val children: Sequence<BlockStart> = readChildIds(parent) + childRef
 
             upsertChildren(nodeRef = parent.nodeRef, prevDataRef = parent.dataRef, children = children)
@@ -463,7 +445,7 @@ internal class MemorySegmentFileSystem(
 //            heapBuffer.flip()
 //            val maxExpectedBodySize = heapBuffer.remaining().toLong()
 
-            val newDataSegment: MemoryDataBlock = blockStore.reserveBlock(mode = WRITE, spanId = "${nodeRef.start} children")
+            val newDataSegment: MemoryDataBlock = blockStore.reserveBlock(mode = WRITE)
             val newDataByteChannel = newDataSegment.newByteChannel(lock = null)
             newDataByteChannel.use {
                 it.writeRefs(children)

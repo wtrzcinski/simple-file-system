@@ -28,11 +28,8 @@ import org.wtrzcinski.files.Fixtures.newAlphanumericString
 import org.wtrzcinski.files.Fixtures.newUniqueString
 import org.wtrzcinski.files.arguments.PathProvider
 import org.wtrzcinski.files.arguments.TestArgumentsProvider
-import org.wtrzcinski.files.Log
 import org.wtrzcinski.files.memory.spi.MemoryFileStore
-import java.net.URI
 import java.nio.file.Files
-import java.nio.file.Path
 import java.nio.file.StandardOpenOption.APPEND
 import java.nio.file.StandardOpenOption.CREATE
 import java.util.concurrent.CopyOnWriteArrayList
@@ -47,7 +44,7 @@ import kotlin.time.measureTime
 class FilesPerformanceTest {
     companion object {
         private const val repeats = 100
-        private const val threads = 100
+        private const val threads = 32
     }
 
     @Parameter
@@ -81,7 +78,7 @@ class FilesPerformanceTest {
         val duration = measureTime {
             repeat(repeats) {
                 val givenFileName = pathProvider.getPath(newUniqueString())
-                val givenFileContent = newAlphanumericString(lengthUntil = 512)
+                val givenFileContent = newAlphanumericString(lengthUntil = 256)
                 Files.write(givenFileName, listOf(givenFileContent), UTF_8)
             }
         }
@@ -141,10 +138,10 @@ class FilesPerformanceTest {
         val pool = Executors.newWorkStealingPool()
         val futures = CopyOnWriteArrayList<Future<*>>()
         val givenList = CopyOnWriteArrayList<String>()
-        repeat(1) {
+        repeat(threads) {
             val submit: Future<*> = pool.submit {
-                repeat(2) {
-                    val givenFileContent = newAlphanumericString(lengthFrom = 128, lengthUntil = 513)
+                repeat(repeats) {
+                    val givenFileContent = newAlphanumericString(lengthFrom = 128, lengthUntil = 256)
                     givenList.add(givenFileContent)
 
                     Files.writeString(givenFileName, givenFileContent, UTF_8)
@@ -152,18 +149,13 @@ class FilesPerformanceTest {
             }
             futures.add(submit)
         }
-
         for (future in futures) {
             future.get()
         }
+
         val endFile = Files.readString(givenFileName)
-        val any = givenList.any { endFile == it }
-        if (any == false) {
-            for (any in Log.get()) {
-                println(any)
-            }
-        }
-        assertThat(any).isTrue()
+        val containsAny = givenList.any { endFile == it }
+        assertThat(containsAny).isTrue()
     }
 
     @Test
@@ -177,8 +169,8 @@ class FilesPerformanceTest {
         val futures = CopyOnWriteArrayList<Future<*>>()
         repeat(threads) {
             val submit: Future<*> = pool.submit {
-                repeat(10) {
-                    val givenFileContent = newAlphanumericString(lengthFrom = 40, lengthUntil = 41)
+                repeat(repeats) {
+                    val givenFileContent = newAlphanumericString(lengthFrom = 1, lengthUntil = 256)
 
                     Files.writeString(givenFilePath, givenFileContent, APPEND, CREATE)
 

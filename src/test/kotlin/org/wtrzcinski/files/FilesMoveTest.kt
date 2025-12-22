@@ -29,12 +29,28 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFileAttributes
+import kotlin.io.path.createParentDirectories
 
 @ParameterizedClass
 @ArgumentsSource(TestArgumentsProvider::class)
 class FilesMoveTest {
     @Parameter
     lateinit var pathProvider: PathProvider
+
+    @Test
+    fun `should rename file`() {
+        val givenFileName1 = pathProvider.getPath(newUniqueString())
+        val givenFileName2 = pathProvider.getPath(newUniqueString())
+        val givenFileContent = newUniqueString()
+
+        Files.writeString(givenFileName1, givenFileContent, Charsets.UTF_8)
+        givenFileName1.createParentDirectories()
+        givenFileName2.createParentDirectories()
+        Files.move(givenFileName1, givenFileName2)
+
+        assertThat(Files.exists(givenFileName1)).isFalse()
+        assertThat(Files.readString(givenFileName2)).isEqualTo(givenFileContent)
+    }
 
     @Test
     fun `should move file`() {

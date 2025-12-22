@@ -99,7 +99,7 @@ internal class MemoryDataIterator(
         }
     }
 
-    fun next(spanId: Any?): MemoryDataBlock? {
+    fun next(): MemoryDataBlock? {
         checkAccessible()
 
         if (index.load() >= data.size) {

@@ -92,7 +92,8 @@ internal abstract class MemoryByteBuffer(
 
     fun writeString(value: String) {
         val toByteArray = value.toByteArray()
-        writeInt(toByteArray.size)
+        val size = toByteArray.size
+        writeInt(size)
         write(toByteArray)
     }
 
@@ -102,12 +103,12 @@ internal abstract class MemoryByteBuffer(
         writeInt(value.toInt())
     }
 
-    fun writeInt(value: Int): ByteBuffer {
-        return byteBuffer.putInt(value)
+    override fun writeInt(value: Int) {
+        byteBuffer.putInt(value)
     }
 
-    fun writeLong(value: Long): ByteBuffer {
-        return byteBuffer.putLong(value)
+    override fun writeLong(value: Long) {
+        byteBuffer.putLong(value)
     }
 
     fun write(byteArray: ByteArray) {
@@ -141,15 +142,16 @@ internal abstract class MemoryByteBuffer(
         return byteBuffer.getLong()
     }
 
-    fun read(dst: ByteArray) {
+    override fun read(dst: ByteArray): Int {
         byteBuffer.get(dst)
+        return dst.size
     }
 
     fun read(dst: ByteArray, dstOffset: Int, length: Long) {
         byteBuffer.get(dst, dstOffset, length.toInt())
     }
 
-    override fun next(spanId: Any?): Boolean {
+    override fun next(): Boolean {
         return false
     }
 

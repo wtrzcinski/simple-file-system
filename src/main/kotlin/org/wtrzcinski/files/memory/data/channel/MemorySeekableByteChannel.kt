@@ -93,13 +93,17 @@ internal data class MemorySeekableByteChannel(
         return current.bodyBuffer.refByteSizeSize
     }
 
+    fun current(): MemoryDataBlock {
+        return data.current()
+    }
+
     override fun readRef(): BlockStart? {
         checkAccessible(option = READ)
 
         val current = data.current()
         val remaining = current.bodyBuffer.remaining()
         if (remaining < refByteSize(current)) {
-            if (!next(null)) {
+            if (!next()) {
                 TODO("Not yet implemented")
             }
             return readRef()
@@ -130,7 +134,8 @@ internal data class MemorySeekableByteChannel(
 
         val length = other.remaining()
         val byteArray = ByteArray(length)
-        val read = read(dst = byteArray, dstOffset = 0, dstLength = length)
+        val read = read(dst = byteArray)
+        require(read <= other.remaining())
         if (read == 0) {
             return -1
         } else {
@@ -145,7 +150,7 @@ internal data class MemorySeekableByteChannel(
         val current = data.current()
         val remaining = current.bodyBuffer.remaining()
         if (remaining < longByteSize) {
-            if (!next(null)) {
+            if (!next()) {
                 TODO("Not yet implemented")
             }
             return readLong()
@@ -159,7 +164,8 @@ internal data class MemorySeekableByteChannel(
 
         val length = readInt()
         val dst = ByteArray(length)
-        read(dst, 0, length)
+        val read0 = read(dst)
+        require(read0 == length)
         val result = String(dst)
         return result
     }
@@ -170,7 +176,7 @@ internal data class MemorySeekableByteChannel(
         val current = data.current()
         val remaining = current.bodyBuffer.remaining()
         if (remaining < intByteSize) {
-            if (!next(null)) {
+            if (!next()) {
                 TODO("Not yet implemented")
             }
             return readInt()
@@ -179,32 +185,34 @@ internal data class MemorySeekableByteChannel(
         return current.bodyBuffer.readInt()
     }
 
-//    todo wojtek stack overflow
-    private fun read(dst: ByteArray, dstOffset: Int, dstLength: Int): Int {
-        val current = data.current()
-        val left = dstLength - dstOffset
-        val remaining = current.bodyBuffer.remaining()
-        if (remaining == 0L) {
-            val next = next(null)
-            if (!next) {
-                return 0
+    override fun read(dst: ByteArray): Int {
+        var dstOffset = 0
+        val dstLength = dst.size
+        while (!Thread.currentThread().isInterrupted()) {
+            val current = current()
+            val left = dstLength - dstOffset
+            val remaining = current.bodyBuffer.remaining()
+            if (remaining == 0L) {
+                val next = next()
+                if (!next) {
+                    break
+                }
+            } else if (remaining < left) {
+                current.bodyBuffer.read(dst = dst, dstOffset = dstOffset, length = remaining)
+                position += remaining
+                dstOffset += remaining.toInt()
+                val next = next()
+                if (!next) {
+                    break
+                }
+            } else {
+                current.bodyBuffer.read(dst = dst, dstOffset = dstOffset, length = left.toLong())
+                position += left.toLong()
+                dstOffset += left
+                break
             }
-            val redNext = read(dst, dstOffset, dstLength)
-            return redNext
-        } else if (remaining < left) {
-            current.bodyBuffer.read(dst, dstOffset, remaining)
-            position += remaining
-            val next = next(null)
-            if (!next) {
-                return remaining.toInt()
-            }
-            val redNext = read(dst, (dstOffset + remaining).toInt(), dstLength)
-            return (remaining + redNext).toInt()
-        } else {
-            current.bodyBuffer.read(dst, dstOffset, left.toLong())
-            position += left.toLong()
-            return left
         }
+        return dstOffset
     }
 
     fun writeRefs(value: Sequence<BlockStart>) {
@@ -240,7 +248,7 @@ internal data class MemorySeekableByteChannel(
         val current = data.current()
         val remaining = current.bodyBuffer.remaining()
         if (remaining < refByteSize(current)) {
-            next(null)
+            next()
             return writeRef(ref)
         }
         position += refByteSize(current)
@@ -254,17 +262,17 @@ internal data class MemorySeekableByteChannel(
         writeInt(nano)
     }
 
-    fun writeLong(other: Long) {
+    override fun writeLong(value: Long) {
         checkAccessible(WRITE)
 
         val current = data.current()
         val remaining = current.bodyBuffer.remaining()
         if (remaining < longByteSize) {
-            next(other)
-            return writeLong(other)
+            next()
+            return writeLong(value)
         }
         position += longByteSize
-        current.bodyBuffer.writeLong(other)
+        current.bodyBuffer.writeLong(value)
     }
 
     fun writeMap(other: Map<String, String>) {
@@ -284,13 +292,13 @@ internal data class MemorySeekableByteChannel(
         }
     }
 
-    fun writeInt(value: Int) {
+    override fun writeInt(value: Int) {
         checkAccessible(WRITE)
 
         val current = data.current()
         val remaining = current.bodyBuffer.remaining()
         if (remaining < intByteSize) {
-            if (!next(value)) {
+            if (!next()) {
                 TODO("Not yet implemented")
             }
             return writeInt(value)
@@ -300,11 +308,9 @@ internal data class MemorySeekableByteChannel(
     }
 
     fun writeString(other: String) {
-        checkAccessible(WRITE)
-
-        val name = other.toByteArray()
-        writeInt(name.size)
-        write(name, 0)
+        val byteArray = other.toByteArray()
+        writeInt(byteArray.size)
+        write(byteArray, 0)
     }
 
     fun write(byteArray: ByteArray, offset: Int) {
@@ -315,7 +321,7 @@ internal data class MemorySeekableByteChannel(
             current.bodyBuffer.write(byteArray, offset, remaining.toInt())
             position += remaining
             val nextOffset = (offset + remaining).toInt()
-            if (!next("${String(byteArray)} $nextOffset")) {
+            if (!next()) {
                 TODO("Not yet implemented")
             }
             write(byteArray, nextOffset)
@@ -325,8 +331,8 @@ internal data class MemorySeekableByteChannel(
         }
     }
 
-    override fun next(spanId: Any?): Boolean {
-        return data.next(spanId) != null
+    override fun next(): Boolean {
+        return data.next() != null
     }
 
     override fun truncate(size: Long): MemorySeekableByteChannel {

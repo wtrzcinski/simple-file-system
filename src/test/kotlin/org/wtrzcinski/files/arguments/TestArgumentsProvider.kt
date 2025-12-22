@@ -29,8 +29,8 @@ import java.util.stream.Stream
 
 class TestArgumentsProvider : ArgumentsProvider {
     override fun provideArguments(parameters: ParameterDeclarations, context: ExtensionContext): Stream<out Arguments> {
-        val capacity = 1024 * 1024 * 4
-        val blockSize = 32
+        val capacity = 1024 * 1024 * 10
+        val blockSize = 128
 
         val tempFile = Files.createTempFile("jsmsfs", ".txt")
         return MemoryScopeType

@@ -24,7 +24,13 @@ interface MemoryData {
 
     fun readLong(): Long
 
+    fun read(dst: ByteArray): Int
+
     fun writeRef(ref: BlockStart)
 
-    fun next(spanId: Any?): Boolean
+    fun writeLong(value: Long)
+
+    fun writeInt(value: Int)
+
+    fun next(): Boolean
 }
